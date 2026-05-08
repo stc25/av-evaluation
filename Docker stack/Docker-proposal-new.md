@@ -13,7 +13,7 @@ It upgrades the runtime from the earlier transitional SQLite-based container set
 - external `Ollama`
 - `ffprobe`-based media duration validation
 
-This is still **not** the future FastAPI/worker/OpenAI architecture. It is the correct next step for running the **current app codebase** with a production-grade relational database rather than SQLite.
+This is the correct next step for running the **current app codebase** with a production-grade relational database rather than SQLite.
 
 ## Implemented Architecture
 
@@ -171,18 +171,11 @@ so a host-based Ollama instance can be reached from Linux Docker.
 
 ## Current App Boot Path in Docker
 
-The backend repo contains both:
-
-- `backend/app.py`
-- `backend/app/`
-
-That creates an import collision for ordinary `gunicorn app:app` style bootstraps.
-
-To avoid that, this stack uses:
+This stack uses:
 
 - `backend/docker_wsgi.py`
 
-It loads `backend/app.py` explicitly by file path and exposes a WSGI `app` object for Gunicorn.
+It loads `backend/app.py` explicitly by file path and exposes a WSGI `app` object for Gunicorn. That keeps the production entrypoint explicit and decoupled from local development helpers.
 
 The app entrypoint:
 

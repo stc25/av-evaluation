@@ -5,7 +5,6 @@ backend/.venv-wsl
 backend/__pycache__
 backend/instance
 backend/.tmp_verify_overlimit.py
-backend/app/__pycache__
 backend/migrations/__pycache__
 frontend/.DS_Store
 frontend/node_modules

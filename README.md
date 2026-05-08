@@ -1,29 +1,31 @@
 # AV Evaluation
 
-AV Evaluation is a web application for practicing academic presentations. A user signs in, uploads an `MP3` or `MP4` presentation recording, and receives AI-generated feedback on structure, tone, clarity, cohesion, and language.
+AV Evaluation is a web application for practicing academic presentations. A user signs in, uploads or records a presentation, and receives AI-generated feedback on structure, tone, clarity, cohesion, and language.
 
 The app is built as a single Flask service that:
 
 - serves the static frontend from `frontend/`
 - exposes authentication, admin, and upload APIs
-- stores users, transcripts, and feedback in SQLite
+- stores users, transcripts, and feedback in SQLite for local development or MariaDB in the Docker deployment
 - transcribes audio/video with `faster-whisper`
-- sends the transcript to a local Ollama model for feedback generation
+- sends the transcript to Ollama for feedback generation
 
 ## Features
 
 - Username/password sign-in with session cookies
-- Upload support for `MP3` and `MP4`
+- Upload support for `MP3`, `MP4`, and recorded `WebM`
 - File size validation:
   - `MP3`: up to `30 MB`
   - `MP4`: up to `300 MB`
+- In-browser webcam recording with a `15` minute limit and `1` minute warning
 - Inline playback before submission
-- Transcript and feedback persistence in SQLite
+- Transcript and feedback persistence with submission history
 - Admin page for:
   - creating users
   - listing users
   - deleting a single user
   - deleting all users in a cohort
+  - reviewing user submissions and stored media
 
 ## Project Structure
 
@@ -38,25 +40,30 @@ The app is built as a single Flask service that:
 │   ├── database.py
 │   ├── seed_admin.py
 │   └── requirements.txt
+├── Docker stack/
+│   ├── docker-compose.prod.yml
+│   ├── INSTALL.md
+│   └── Docker-proposal-new.md
 ├── frontend/
 │   ├── index.html
 │   ├── admin.html
 │   ├── app.js
 │   ├── admin.js
 │   └── app.css
-└── VideoSamples/
 ```
+
+The current application code lives in `backend/` and `frontend/`. Production deployment files live in `Docker stack/`.
 
 ## How It Works
 
 1. A user signs in through the frontend.
-2. The browser uploads an `MP3` or `MP4` file to `POST /api/upload`.
+2. The browser uploads an `MP3`, `MP4`, or recorded `WebM` file to `POST /api/upload`.
 3. The backend writes the upload to a temporary file.
 4. `faster-whisper` transcribes the file.
 5. The transcript is sent to Ollama using the configured local model.
 6. The generated markdown feedback is returned to the frontend.
 7. The transcript and feedback are stored in SQLite.
-8. The temporary upload file is deleted.
+8. The submission metadata, transcript, feedback, and stored media path are saved for later review.
 
 ## Prerequisites
 
@@ -175,7 +182,7 @@ WHISPER_COMPUTE_TYPE=int8 \
 
 ## Data Storage
 
-SQLite stores two tables:
+Local development stores two tables in SQLite, and the Docker deployment stores the same logical data in MariaDB:
 
 - `users`
 - `submissions`
@@ -188,7 +195,7 @@ Each submission stores:
 - feedback markdown
 - submission timestamp
 
-Uploaded media files are temporary only and are deleted after processing.
+Uploaded media files are kept so users and admins can review prior submissions.
 
 ## Admin Capabilities
 
