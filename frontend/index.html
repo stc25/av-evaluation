@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Upload an audio or video presentation and receive AI-powered feedback — ADTIS, University of Cambridge.">
+  <title>Presentation Practice — ADTIS</title>
+  <link rel="stylesheet" href="app.css">
+  <!-- marked: markdown parser; DOMPurify: XSS sanitiser for rendered HTML -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <noscript>
+    <div class="noscript-warning">
+      JavaScript is required to use Presentation Practice. Please enable it in your browser settings.
+    </div>
+  </noscript>
+
+  <header>
+    <div class="header-inner">
+      <h1>Presentation Practice</h1>
+      <p class="subtitle">ADTIS – Academic Development and Training for International Students</p>
+    </div>
+  </header>
+
+  <main id="main-content">
+
+    <!-- ══════════════════════════════════════════════════════
+         LOGIN VIEW  (shown when no active session)
+         ══════════════════════════════════════════════════════ -->
+    <section id="login-view" class="view" aria-labelledby="login-heading">
+      <div class="card login-card">
+        <h2 id="login-heading">Sign In</h2>
+
+        <form id="login-form" novalidate>
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username"
+                   autocomplete="username" required>
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password"
+                   autocomplete="current-password" required>
+          </div>
+
+          <p id="login-error" class="error-msg" role="alert" hidden></p>
+
+          <button type="submit" id="login-btn" class="btn btn-primary btn-full">
+            Sign In
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════
+         APP VIEW  (shown after successful login)
+         ══════════════════════════════════════════════════════ -->
+    <section id="app-view" class="view" aria-label="Presentation upload" hidden>
+
+      <!-- User bar -->
+      <div class="top-bar">
+        <p class="top-bar-user">
+          Signed in as <strong id="display-username"></strong>
+        </p>
+        <div class="top-bar-actions">
+          <a id="admin-link" href="admin.html" class="btn btn-secondary" hidden>
+            Admin Panel
+          </a>
+          <button id="logout-btn" class="btn btn-outline">Sign Out</button>
+        </div>
+      </div>
+
+      <!-- Submission history -->
+      <div class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Previous Feedback</h2>
+            <p class="intro-text">
+              Reopen feedback from earlier presentation uploads or upload a new recording below.
+            </p>
+          </div>
+          <button id="refresh-history-btn" class="btn btn-outline" type="button">
+            Refresh
+          </button>
+        </div>
+
+        <p id="history-error" class="error-msg" role="alert" hidden></p>
+        <div id="history-empty" class="history-empty" hidden>
+          You have not uploaded any presentations yet.
+        </div>
+        <div id="history-list" class="history-list" aria-live="polite"></div>
+      </div>
+
+      <!-- Webcam recording card -->
+      <div class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Record With Your Webcam</h2>
+            <p class="intro-text">
+              Record a new presentation in your browser. Recording stops automatically at 15 minutes.
+            </p>
+          </div>
+        </div>
+
+        <div id="recording-unsupported" class="history-empty" hidden>
+          Webcam recording is not supported in this browser. Upload an existing MP3, MP4, or WebM file instead.
+        </div>
+
+        <div id="recording-panel">
+          <video id="recording-preview-live" class="recording-preview" autoplay muted playsinline hidden></video>
+          <video id="recording-preview-playback" class="recording-preview" controls playsinline hidden></video>
+
+          <div class="recording-meta">
+            <p id="recording-status" class="recording-status">Ready to record a new presentation.</p>
+            <p id="recording-timer" class="recording-timer" hidden>Time remaining: 15:00</p>
+          </div>
+
+          <p id="recording-warning" class="recording-warning" role="alert" hidden></p>
+          <p id="recording-error" class="error-msg" role="alert" hidden></p>
+
+          <div class="action-row recording-controls">
+            <button id="enable-camera-btn" class="btn btn-outline" type="button">
+              Enable Camera
+            </button>
+            <button id="start-recording-btn" class="btn btn-primary" type="button">
+              Start Recording
+            </button>
+            <button id="stop-recording-btn" class="btn btn-outline" type="button" hidden>
+              Stop Recording
+            </button>
+            <button id="discard-recording-btn" class="btn btn-outline" type="button" hidden>
+              Discard Recording
+            </button>
+            <button id="upload-recording-btn" class="btn btn-secondary" type="button" hidden>
+              Obtain Feedback From Recording
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload card -->
+      <div class="card">
+        <h2>Upload Your Presentation</h2>
+        <p class="intro-text">
+          Upload an MP3 (audio), MP4 (video), or WebM (video) recording of your presentation
+          to receive personalised feedback.
+        </p>
+
+        <!-- Drop zone — keyboard-accessible via role="button" and tabindex -->
+        <div id="drop-zone"
+             role="button"
+             tabindex="0"
+             aria-label="File upload area — drag and drop your file here, or press Enter to browse">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true" focusable="false">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="drop-zone-primary">
+            Drag your file here, or <span class="link-style">click to browse</span>
+          </p>
+          <p class="drop-zone-hint">MP3 (max&nbsp;30&nbsp;MB) &nbsp;·&nbsp; MP4/WebM (max&nbsp;300&nbsp;MB)</p>
+        </div>
+
+        <!-- Hidden file input triggered by the drop zone -->
+        <input type="file" id="file-input" accept=".mp3,.mp4,.webm"
+               aria-hidden="true" tabindex="-1">
+
+        <!-- File metadata (shown after a file is chosen) -->
+        <div id="file-info" class="file-info" hidden>
+          <span id="file-name-display"></span>
+          <span id="file-size-display" class="file-size"></span>
+        </div>
+
+        <!-- Media player (audio or video depending on file type) -->
+        <div id="player-container" hidden>
+          <audio id="audio-player" controls></audio>
+          <video id="video-player" controls hidden></video>
+        </div>
+
+        <!-- Validation / upload error -->
+        <p id="upload-error" class="error-msg" role="alert" hidden></p>
+
+        <!-- Action buttons -->
+        <div class="action-row">
+          <button id="clear-btn" class="btn btn-outline" hidden>Clear</button>
+          <button id="feedback-btn" class="btn btn-primary" disabled>
+            Obtain Feedback
+          </button>
+        </div>
+
+        <!-- Progress indicator (shown during upload, transcription and inference) -->
+        <div id="progress-area" hidden aria-live="polite" aria-atomic="true">
+          <div class="spinner" role="status" aria-label="Processing"></div>
+          <p id="progress-msg"></p>
+        </div>
+      </div>
+
+      <!-- Feedback card (shown after a successful response) -->
+      <div id="feedback-container" class="card" hidden aria-live="polite">
+        <h2 id="feedback-title">Your Feedback</h2>
+        <p id="feedback-meta" class="feedback-meta" hidden></p>
+        <div id="feedback-content" class="feedback-body"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Language Centre University of Cambridge</p>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,20 @@
+.claude/
+Users info.txt
+VideoSamples/
+
+backend/.venv/
+backend/.venv-wsl/
+backend/instance/
+backend/.tmp_verify_overlimit.py
+
+Docker stack/.env.production
+Docker stack/.env.production.local
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store

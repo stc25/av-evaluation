@@ -1,0 +1,20 @@
+.git
+.gitignore
+backend/.venv
+backend/.venv-wsl
+backend/__pycache__
+backend/instance
+backend/.tmp_verify_overlimit.py
+backend/app/__pycache__
+backend/migrations/__pycache__
+frontend/.DS_Store
+frontend/node_modules
+Docker stack/.env.production
+Docker stack/.env.production.local
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

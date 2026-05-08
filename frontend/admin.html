@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Admin panel — Presentation Practice, ADTIS, University of Cambridge.">
+  <title>Admin Panel — Presentation Practice</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="admin.js" defer></script>
+</head>
+<body>
+
+  <a href="#admin-main" class="skip-link">Skip to main content</a>
+
+  <header>
+    <div class="header-inner">
+      <h1>Presentation Practice</h1>
+      <p class="subtitle">ADTIS – Academic Development and Training for International Students</p>
+    </div>
+  </header>
+
+  <main id="admin-main" hidden>
+
+    <!-- User bar -->
+    <div class="top-bar">
+      <p class="top-bar-user">
+        Admin Panel — signed in as <strong id="display-username"></strong>
+      </p>
+      <div class="top-bar-actions">
+        <a href="/" class="btn btn-secondary">&#8592; Back to App</a>
+        <button id="logout-btn" class="btn btn-outline">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         ADD USER
+         ══════════════════════════════════════════════════════ -->
+    <div class="card">
+      <h2>Add User</h2>
+
+      <form id="add-user-form" novalidate>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="new-username">Username</label>
+            <input type="text" id="new-username" autocomplete="off" required>
+          </div>
+
+          <div class="form-group">
+            <label for="new-password">Password</label>
+            <input type="password" id="new-password" autocomplete="new-password" required>
+          </div>
+
+          <div class="form-group">
+            <label for="new-cohort">Cohort ID</label>
+            <input type="text" id="new-cohort" placeholder="e.g. 2024-A">
+          </div>
+
+          <div class="form-group form-group--checkbox">
+            <label class="checkbox-label">
+              <input type="checkbox" id="new-is-admin">
+              Admin user
+            </label>
+          </div>
+        </div>
+
+        <p id="add-user-error"   class="error-msg"   role="alert" hidden></p>
+        <p id="add-user-success" class="success-msg"  role="status" hidden></p>
+
+        <button type="submit" id="add-user-btn" class="btn btn-primary">Add User</button>
+      </form>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         DELETE COHORT
+         ══════════════════════════════════════════════════════ -->
+    <div class="card">
+      <h2>Delete Cohort</h2>
+      <p class="intro-text">
+        Permanently removes all users in the specified cohort together with
+        their submissions. This action cannot be undone.
+      </p>
+
+      <form id="delete-cohort-form" novalidate>
+        <div class="form-row form-row--narrow">
+          <div class="form-group">
+            <label for="cohort-id-input">Cohort ID</label>
+            <input type="text" id="cohort-id-input" placeholder="e.g. 2024-A" required>
+          </div>
+        </div>
+
+        <p id="delete-cohort-error"   class="error-msg"  role="alert"  hidden></p>
+        <p id="delete-cohort-success" class="success-msg" role="status" hidden></p>
+
+        <button type="submit" class="btn btn-danger">Delete Cohort</button>
+      </form>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         USERS TABLE
+         ══════════════════════════════════════════════════════ -->
+    <div class="card">
+      <h2>All Users</h2>
+      <p id="table-error" class="error-msg" role="alert" hidden></p>
+      <div id="users-table-container">
+        <p class="loading-msg">Loading users…</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-heading">
+        <div>
+          <h2>User Submissions</h2>
+          <p id="selected-user-label" class="intro-text">Select a user to inspect their feedback history.</p>
+        </div>
+        <button id="refresh-submissions-btn" class="btn btn-outline" type="button" hidden>Refresh</button>
+      </div>
+
+      <p id="submissions-error" class="error-msg" role="alert" hidden></p>
+      <p id="submissions-empty" class="no-data-msg" hidden>No submissions found for this user.</p>
+      <div id="submissions-list" class="history-list" hidden></div>
+
+      <div id="submission-detail" class="submission-detail" hidden>
+        <div class="submission-detail-header">
+          <div>
+            <h3 id="submission-detail-title">Submission</h3>
+            <p id="submission-detail-meta" class="feedback-meta"></p>
+          </div>
+          <a id="submission-media-link" class="btn btn-secondary" href="#" target="_blank" rel="noopener" hidden>Open Uploaded Media</a>
+        </div>
+
+        <div class="submission-detail-grid">
+          <div>
+            <h4>Feedback</h4>
+            <pre id="submission-feedback" class="detail-text"></pre>
+          </div>
+          <div>
+            <h4>Transcript</h4>
+            <pre id="submission-transcript" class="detail-text"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════════════════════════════════════════
+       CONFIRMATION MODAL
+       ══════════════════════════════════════════════════════ -->
+  <div id="confirm-modal" class="modal-overlay" hidden
+       role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <h3 id="modal-title">Confirm Deletion</h3>
+      <p  id="modal-body"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel"  class="btn btn-outline">Cancel</button>
+        <button id="modal-confirm" class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p>&copy; 2026 Language Centre University of Cambridge</p>
+  </footer>
+
+</body>
+</html>

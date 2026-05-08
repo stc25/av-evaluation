@@ -1,0 +1,59 @@
+ADTIS - Presentation Feedback
+
+This is an application that allows the user to upload an audio or video presentation to the website and obtain feedback on the presentation. 
+The application consists of a front-end and a backend.
+
+Overview: The front-end is a one page, professional looking web page using the University of Cambridge styles and fonts. After logging in the user has a choice 
+to upload their presentation either using a open-file dialog or by dragging the audio/video file onto a drop zone. The user sees a set of 
+audio controls that allow him to play the audio. There is a button 'Obtain feedback'. When clicked the webpage sends the audio/video 
+to the backend. The backend generates a transcript and passes this to a locally run Ollama model that generates feedback and an evaluation of 
+the transcript. This information is passed back to the front-end and displayed to the user. There is also a front-end admin page that allows an administrator
+to add users to the stysten. Users cannot add themselves to the system. The system generates a unique user_id for each user.
+
+Front-end:
+The title of the app is 'Presentation Practice'. The subtitle 'ATIS -Academic Development and Training for International Students'. There should be footer on all pages.
+The front-end is build using HTML, CSS and Javascript. All CSS and Javascript are kept in separate app.css and app.js files, there is no CSS or 
+Javascript in the HTML file. The Javascript will be well documented and commented to ensure maintainability. The page is both responsive and 
+accessible. The minimum width of the app is 350px and the maximum 1000px. There is also a breakpoint at 760px. The app is horizontally centered on the screen).
+There is a footer with the copyright notice '2026 Language Centre University of Cambridge'. The feedback received from the back-end must be converted to 
+HTML and displayed below the audio-controls. 
+
+
+Backend
+The backend uses Python/Flask, a transcript is extracted from the submitted audio/video file and stored locally togehter with the relevant user_id and 
+the date_time of the submisstion.
+
+The transcription uses faster-whisper and the AI Model is a locally run qwen2.5 model. The reply from the back-end server is a 
+text-string containing the feedback in markdown format. The audio/video video file can be discarded. The call to the LLM uses the following prompt. 
+The backend ensures the audio/video is submitted by an
+legitimate user.
+
+```
+You are an experienced presentation coach evaluating a postgraduate research presentation. The speaker is a non-native English speaker (IELTS 8-9 level) presenting their intended research to fellow postgraduate students across different disciplines.
+
+Provide a concise evaluation (maximum 300 words) covering:
+
+1. **Structure**: Assess the overall organization and flow of the presentation
+2. **Tone & Style**: Evaluate appropriateness for an interdisciplinary postgraduate audience
+3. **Clarity**: Analyze how clearly ideas and research intentions are communicated
+4. **Cohesion**: Examine logical connections between sections and ideas
+5. **Language**: Evaluate grammar, vocabulary, and academic style accuracy
+
+After the evaluation, provide 2-3 specific, actionable suggestions for improvement.
+
+Format your response using markdown with clear headings. Do not include any preamble or concluding remarks - begin directly with the evaluation.
+
+TRANSCRIPT:
+
+<<TRANSCRIPT>>
+```
+
+
+Handle transcription errors gracefully
+Ensure markdown is properly sanitized before rendering as HTML
+The front-end should be able to interact across different domains (CORS)
+
+
+
+
+ 
