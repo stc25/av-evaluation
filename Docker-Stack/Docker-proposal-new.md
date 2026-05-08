@@ -1,8 +1,8 @@
-# Docker Stack: Production-Oriented Runtime for the Current App
+# Docker-Stack: Production-Oriented Runtime for the Current App
 
 ## Purpose
 
-This `Docker stack` folder now contains a production-oriented Docker setup for the **current Flask application**.
+This `Docker-Stack` folder now contains a production-oriented Docker setup for the **current Flask application**.
 
 It upgrades the runtime from the earlier transitional SQLite-based container setup to a stack that uses:
 
@@ -188,7 +188,7 @@ The app entrypoint:
 
 ## How to Run
 
-From inside the `Docker stack` folder:
+From inside the `Docker-Stack` folder:
 
 ```bash
 docker compose --env-file .env.production.example -f docker-compose.prod.yml up --build
@@ -253,7 +253,7 @@ That would replace:
 
 ## Summary
 
-The `Docker stack` folder now supports a more production-ready deployment of the **current Flask app** with:
+The `Docker-Stack` folder now supports a more production-ready deployment of the **current Flask app** with:
 
 - Caddy
 - Gunicorn

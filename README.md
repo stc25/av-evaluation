@@ -40,7 +40,7 @@ The app is built as a single Flask service that:
 │   ├── database.py
 │   ├── seed_admin.py
 │   └── requirements.txt
-├── Docker stack/
+├── Docker-Stack/
 │   ├── docker-compose.prod.yml
 │   ├── INSTALL.md
 │   └── Docker-proposal-new.md
@@ -52,7 +52,7 @@ The app is built as a single Flask service that:
 │   └── app.css
 ```
 
-The current application code lives in `backend/` and `frontend/`. Production deployment files live in `Docker stack/`.
+The current application code lives in `backend/` and `frontend/`. Production deployment files live in `Docker-Stack/`.
 
 ## How It Works
 

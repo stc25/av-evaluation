@@ -19,7 +19,7 @@ services:
   app:
     build:
       context: ..
-      dockerfile: Docker stack/backend/Dockerfile
+      dockerfile: Docker-Stack/backend/Dockerfile
     working_dir: /app/backend
     environment:
       PORT: ${PORT:-8080}

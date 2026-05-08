@@ -7,8 +7,8 @@ backend/.venv-wsl/
 backend/instance/
 backend/.tmp_verify_overlimit.py
 
-Docker stack/.env.production
-Docker stack/.env.production.local
+Docker-Stack/.env.production
+Docker-Stack/.env.production.local
 
 __pycache__/
 *.pyc

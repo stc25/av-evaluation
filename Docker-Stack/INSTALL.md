@@ -12,7 +12,7 @@ This guide assumes:
 
 - you have a public domain name for the app
 - your server already has Docker and Docker Compose installed
-- you will use the files in this `Docker stack` folder
+- you will use the files in this `Docker-Stack` folder
 - Ollama is hosted remotely and reachable from the app container over the network
 
 ## Runtime Scope
@@ -86,7 +86,7 @@ If using a cloud firewall or security group, configure it the same way:
 ## 4. Enter the Docker Stack Folder
 
 ```bash
-cd "Docker stack"
+cd Docker-Stack
 ```
 
 ## 5. Create a Production Environment File
@@ -260,7 +260,7 @@ To deploy updated code from the repository:
 ```bash
 cd /path/to/av-evaluation
 git pull
-cd "Docker stack"
+cd Docker-Stack
 docker compose --env-file .env.production -f docker-compose.prod.yml up --build -d
 ```
 
