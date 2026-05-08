@@ -1,5 +1,9 @@
 FROM python:3.12-slim-bookworm
 
+# Keep the Python app image on Debian slim rather than Alpine.
+# `faster-whisper`, `ctranslate2`, `av`, and ffmpeg/ffprobe are materially
+# more reliable on glibc-based images than on musl-based Alpine images.
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1

@@ -28,7 +28,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}
       DATABASE_URL: ${DATABASE_URL:-mariadb://app_user:app_password@mariadb:3306/av_evaluation}
       UPLOADS_DIR: ${UPLOADS_DIR:-/data/uploads}
-      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434/api/generate}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama.example.internal:11434/api/generate}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:latest}
       WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-medium}
       WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
@@ -40,8 +40,6 @@ services:
       - /opt/docker-scripts/app-entrypoint.sh
     expose:
       - "8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - uploads_data:/data/uploads
     depends_on:

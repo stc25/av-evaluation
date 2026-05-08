@@ -23,9 +23,11 @@ Browser
     -> Flask app container
          -> MariaDB
          -> persistent uploads volume
-         -> external Ollama endpoint
+         -> remote Ollama endpoint
          -> faster-whisper + ffprobe inside the app container
 ```
+
+The Python application runtime is fully containerized. It does not rely on host Python, host virtual environments, or host-installed FFmpeg.
 
 ## What Changed
 
@@ -63,6 +65,16 @@ Responsibilities:
 - calls Ollama through `OLLAMA_URL`
 - reads and writes data in MariaDB
 - stores uploaded media in a persistent Docker volume
+
+Base image recommendation:
+
+- keep the app on `python:3.12-slim-bookworm`
+- do not switch this app container to Alpine
+
+Reason:
+
+- `faster-whisper`, `ctranslate2`, `av`, and FFmpeg tooling are more dependable on a glibc-based image than on Alpine `musl`
+- Alpine would increase build/runtime risk for little operational gain in this stack
 
 ### `mariadb`
 
@@ -154,20 +166,11 @@ This replaces the earlier single SQLite-oriented app volume.
 
 ## Ollama Connectivity
 
-This stack still expects **external Ollama**.
+This stack expects **remote Ollama**.
 
-Use one of these approaches:
+Use this approach:
 
-1. point `OLLAMA_URL` at a remote Ollama server
-2. run Ollama on the Docker host and use `host.docker.internal`
-
-The app container includes:
-
-```text
-host.docker.internal:host-gateway
-```
-
-so a host-based Ollama instance can be reached from Linux Docker.
+1. point `OLLAMA_URL` at a remote Ollama server that is reachable from the Docker host network
 
 ## Current App Boot Path in Docker
 
@@ -210,7 +213,7 @@ Example:
 
 ```text
 DATABASE_URL=mariadb://app_user:strong-password@mariadb:3306/av_evaluation
-OLLAMA_URL=http://131.111.168.123:11434/api/generate
+OLLAMA_URL=http://ollama.example.internal:11434/api/generate
 ```
 
 ## Current Operational Shape

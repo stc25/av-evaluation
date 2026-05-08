@@ -6,12 +6,27 @@ This guide explains how to deploy the current app from this repository onto a re
 - only ports `80` and `443` are exposed to the internet
 - MariaDB is private to the Docker network
 - uploaded media and database state are persisted in Docker volumes
+- the Flask app runtime does not depend on host Python or host system packages
 
 This guide assumes:
 
 - you have a public domain name for the app
 - your server already has Docker and Docker Compose installed
 - you will use the files in this `Docker stack` folder
+- Ollama is hosted remotely and reachable from the app container over the network
+
+## Runtime Scope
+
+Everything in the application runtime is containerized except Ollama:
+
+- `caddy` handles inbound `80` and `443`
+- `app` runs the Flask application under Gunicorn inside Docker
+- `mariadb` runs inside Docker
+- uploaded media is stored in Docker volumes
+
+The Docker host does **not** need local Python, a local virtual environment, or host-installed FFmpeg for the app to run.
+
+The Python application container intentionally uses `python:3.12-slim-bookworm`, not Alpine. That is the correct production base image for this dependency set because `faster-whisper`, `ctranslate2`, `av`, and FFmpeg tooling are substantially more reliable on a glibc-based image than on Alpine `musl`.
 
 ## 1. Server Preparation
 
@@ -126,11 +141,7 @@ OLLAMA_URL=http://10.0.0.25:11434/api/generate
 OLLAMA_MODEL=qwen2.5:latest
 ```
 
-If Ollama runs on the same host outside Docker, you can use:
-
-```text
-OLLAMA_URL=http://host.docker.internal:11434/api/generate
-```
+Set `OLLAMA_URL` to the remote Ollama endpoint that this server can reach over the network. Do not rely on `host.docker.internal` in this production setup.
 
 ### Suggested worker/runtime settings
 
@@ -151,6 +162,7 @@ This stack is secure by default in these ways:
 - only Caddy publishes ports to the host
 - the `app` service is only exposed internally on the Docker network
 - the `mariadb` service is only exposed internally on the Docker network
+- Ollama is accessed as an outbound remote dependency rather than exposed through this stack
 - uploads are stored in a Docker volume, not in a public web root
 - Flask session cookies are marked `Secure` when `SESSION_COOKIE_SECURE=true`
 
