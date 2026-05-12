@@ -105,6 +105,8 @@ nano .env.production
 
 At minimum, set these values.
 
+The example file already includes the supported runtime and debug environment variables for the current stack. Treat `.env.production.example` as the template and keep your real secrets only in `.env.production`.
+
 ### Required security and runtime settings
 
 ```text
@@ -151,8 +153,68 @@ UPLOADS_DIR=/data/uploads
 WHISPER_MODEL_SIZE=medium
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
+APP_DEBUG=false
+APP_LOG_LEVEL=INFO
+GUNICORN_LOG_LEVEL=info
 APP_WORKERS=2
 APP_THREADS=4
+```
+
+### Optional debug settings for testing
+
+For temporary diagnostics during testing, you can increase logging with:
+
+```text
+APP_DEBUG=true
+APP_LOG_LEVEL=DEBUG
+GUNICORN_LOG_LEVEL=debug
+APP_WORKERS=1
+```
+
+What those do:
+
+- `APP_DEBUG=true`
+  - enables Flask debug-style exception propagation inside the app
+- `APP_LOG_LEVEL=DEBUG`
+  - raises Python application logging to `DEBUG`
+- `GUNICORN_LOG_LEVEL=debug`
+  - raises Gunicorn logging verbosity
+- `APP_WORKERS=1`
+  - makes logs easier to follow while debugging
+
+Use those values only while debugging. Turn them back down for normal production operation.
+
+### Local HTTP test profile
+
+If you want to test the Docker stack locally over plain HTTP instead of real HTTPS, use values like:
+
+```text
+CADDY_SITE_ADDRESS=:80
+ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+SESSION_COOKIE_SECURE=false
+APP_DEBUG=true
+APP_LOG_LEVEL=DEBUG
+GUNICORN_LOG_LEVEL=debug
+```
+
+Why:
+
+- `SESSION_COOKIE_SECURE=true` prevents login cookies from working over plain HTTP
+- `CADDY_SITE_ADDRESS=:80` is for local or temporary non-TLS testing only
+
+Do not keep those HTTP test values in a real internet-facing deployment.
+
+### Real HTTPS production profile
+
+For a real deployment with automatic Caddy certificates, use values like:
+
+```text
+CADDY_SITE_ADDRESS=app.example.com
+ALLOWED_ORIGINS=https://app.example.com
+SESSION_COOKIE_SECURE=true
+APP_DEBUG=false
+APP_LOG_LEVEL=INFO
+GUNICORN_LOG_LEVEL=info
 ```
 
 ## 6. Review the Important Security Model
@@ -193,6 +255,18 @@ Check logs:
 docker compose --env-file .env.production -f docker-compose.prod.yml logs -f
 ```
 
+For focused application debugging:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f app
+```
+
+For focused reverse-proxy debugging:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f caddy
+```
+
 ## 8. HTTPS Behavior
 
 Caddy will automatically obtain and renew TLS certificates when:
@@ -209,6 +283,12 @@ If you leave `CADDY_SITE_ADDRESS=:80`, the stack will not be configured for publ
 
 For a real production deployment, do **not** leave `CADDY_SITE_ADDRESS=:80`.
 Set it to the real public hostname instead.
+
+If you are intentionally testing over plain HTTP on a local or private machine, set:
+
+- `CADDY_SITE_ADDRESS=:80`
+- `SESSION_COOKIE_SECURE=false`
+- `ALLOWED_ORIGINS=http://localhost,http://127.0.0.1`
 
 ## 9. Create the Initial Admin User
 
@@ -252,6 +332,13 @@ You can also inspect container status:
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml ps
 ```
+
+If the `app` service fails to start, check these first:
+
+- `DATABASE_URL` matches `MARIADB_DATABASE`, `MARIADB_USER`, and `MARIADB_PASSWORD`
+- `OLLAMA_URL` is reachable from the app container
+- `SESSION_COOKIE_SECURE` is not left at `true` during plain-HTTP local testing
+- `CADDY_SITE_ADDRESS` matches whether you are doing local HTTP testing or real HTTPS deployment
 
 ## 11. Upgrades
 

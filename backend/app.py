@@ -7,12 +7,22 @@ from auth import auth_bp
 from admin import admin_bp
 from upload import upload_bp
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    return os.environ.get(name, str(default)).strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _get_log_level() -> int:
+    raw_level = os.environ.get('APP_LOG_LEVEL', 'INFO').strip().upper()
+    return getattr(logging, raw_level, logging.INFO)
+
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=_get_log_level(),
     format='%(asctime)s %(levelname)s %(name)s: %(message)s',
 )
 
 FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'frontend'))
+APP_DEBUG = _env_flag('APP_DEBUG', False)
 
 ALLOWED_ORIGINS = os.environ.get(
     'ALLOWED_ORIGINS',
@@ -23,6 +33,8 @@ ALLOWED_ORIGINS = os.environ.get(
 def create_app():
     app = Flask(__name__)
 
+    app.config['DEBUG'] = APP_DEBUG
+    app.config['PROPAGATE_EXCEPTIONS'] = APP_DEBUG
     app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -77,6 +89,7 @@ if __name__ == '__main__':
     app.run(
         host='0.0.0.0',
         port=int(os.environ.get('PORT', '8080')),
-        debug=True,
+        debug=APP_DEBUG,
+        use_reloader=APP_DEBUG,
         threaded=True,
     )

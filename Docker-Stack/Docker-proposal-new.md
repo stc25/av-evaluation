@@ -140,6 +140,12 @@ Environment variables used by the production Docker stack:
 - `WHISPER_MODEL_SIZE`
 - `WHISPER_DEVICE`
 - `WHISPER_COMPUTE_TYPE`
+- `APP_DEBUG`
+  - enables Flask debug-style exception propagation for controlled testing
+- `APP_LOG_LEVEL`
+  - Python application log level such as `INFO` or `DEBUG`
+- `GUNICORN_LOG_LEVEL`
+  - Gunicorn log level such as `info` or `debug`
 - `APP_WORKERS`
   - Gunicorn worker count
 - `APP_THREADS`
@@ -150,6 +156,25 @@ Environment variables used by the production Docker stack:
 - `MARIADB_ROOT_PASSWORD`
 - `CADDY_SITE_ADDRESS`
 - `CADDY_EMAIL`
+
+Recommended defaults for normal production:
+
+```text
+APP_DEBUG=false
+APP_LOG_LEVEL=INFO
+GUNICORN_LOG_LEVEL=info
+```
+
+Recommended temporary values while debugging:
+
+```text
+APP_DEBUG=true
+APP_LOG_LEVEL=DEBUG
+GUNICORN_LOG_LEVEL=debug
+APP_WORKERS=1
+```
+
+This stack uses controlled debug logging. It does not rely on exposing Flask's interactive debugger publicly.
 
 ## Volumes
 
@@ -216,6 +241,27 @@ DATABASE_URL=mariadb://app_user:strong-password@mariadb:3306/av_evaluation
 OLLAMA_URL=http://ollama.example.internal:11434/api/generate
 ```
 
+For real HTTPS production, also make sure:
+
+```text
+CADDY_SITE_ADDRESS=app.example.com
+ALLOWED_ORIGINS=https://app.example.com
+SESSION_COOKIE_SECURE=true
+```
+
+For local HTTP testing instead, use:
+
+```text
+CADDY_SITE_ADDRESS=:80
+ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+SESSION_COOKIE_SECURE=false
+APP_DEBUG=true
+APP_LOG_LEVEL=DEBUG
+GUNICORN_LOG_LEVEL=debug
+```
+
+That distinction matters because secure session cookies will not work over plain HTTP.
+
 ## Current Operational Shape
 
 This stack is now stronger than the earlier SQLite-based runtime because it uses:
@@ -232,6 +278,13 @@ However, the app still has these current-codebase limitations:
 - no worker container
 - no object storage
 - no horizontal scaling strategy for long-running inference
+
+Operationally, the stack is easier to diagnose than before because:
+
+- Gunicorn access logs go to container stdout
+- Gunicorn error logs go to container stderr
+- Flask logging can be raised with `APP_LOG_LEVEL`
+- startup behavior can be made more verbose with `APP_DEBUG` and `GUNICORN_LOG_LEVEL`
 
 So this stack is a **production-oriented upgrade for the current app**, but not yet the final long-term architecture.
 
