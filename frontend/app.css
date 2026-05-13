@@ -549,6 +549,22 @@ footer {
   gap: 0.75rem;
 }
 
+.submission-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.submission-list-open {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .submission-detail-header h3,
 .submission-detail-grid h4 {
   font-family: Georgia, 'Times New Roman', serif;

@@ -182,19 +182,34 @@ function renderSubmissionList(payload) {
     const submittedAt = escapeHtml(buildSubmissionMeta(submission));
     const mediaStatus = submission.has_media ? 'Media available' : 'Media unavailable';
     return `
-      <button
-        class="history-item admin-history-item open-submission-btn"
-        data-submission-id="${escapeHtml(submission.submission_id)}"
-        type="button">
-        <span class="history-item-title">${label}</span>
-        <span class="history-item-date">${submittedAt}</span>
-        <span class="history-item-date">${mediaStatus}</span>
-      </button>
+      <div class="history-item admin-history-item submission-list-item">
+        <button
+          class="submission-list-open open-submission-btn"
+          data-submission-id="${escapeHtml(submission.submission_id)}"
+          type="button">
+          <span class="history-item-title">${label}</span>
+          <span class="history-item-date">${submittedAt}</span>
+          <span class="history-item-date">${mediaStatus}</span>
+        </button>
+        <button
+          class="btn btn-sm btn-danger delete-submission-list-btn"
+          data-submission-id="${escapeHtml(submission.submission_id)}"
+          data-submission-label="${label}"
+          type="button">
+          Delete Submission
+        </button>
+      </div>
     `;
   }).join('');
 
   dom.submissionsList.querySelectorAll('.open-submission-btn').forEach((btn) => {
     btn.addEventListener('click', () => openSubmissionDetail(btn.dataset.submissionId));
+  });
+
+  dom.submissionsList.querySelectorAll('.delete-submission-list-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await deleteSubmission(btn.dataset.submissionId, btn.dataset.submissionLabel);
+    });
   });
 }
 
@@ -263,24 +278,27 @@ function resetSubmissionInspector(message) {
   hideSubmissionDetail();
 }
 
-async function deleteSelectedSubmission() {
-  if (!state.selectedSubmissionId || !state.selectedUserId) {
+async function deleteSubmission(submissionId, submissionLabel = '') {
+  if (!submissionId || !state.selectedUserId) {
     return;
   }
 
-  const submissionLabel = dom.submissionDetailTitle.textContent || 'this submission';
+  const label = submissionLabel || dom.submissionDetailTitle.textContent || 'this submission';
   const confirmed = await showConfirmModal(
     'Delete Submission',
-    `Delete '${submissionLabel}' for '${state.selectedUsername}'? This cannot be undone.`
+    `Delete '${label}' for '${state.selectedUsername}'? This cannot be undone.`
   );
   if (!confirmed) return;
 
-  dom.deleteSubmissionBtn.disabled = true;
-  dom.deleteSubmissionBtn.textContent = 'Deleting...';
+  const deletingSelectedSubmission = submissionId === state.selectedSubmissionId;
+  if (deletingSelectedSubmission) {
+    dom.deleteSubmissionBtn.disabled = true;
+    dom.deleteSubmissionBtn.textContent = 'Deleting...';
+  }
 
   try {
     const resp = await apiFetch(
-      `/api/admin/submissions/${encodeURIComponent(state.selectedSubmissionId)}`,
+      `/api/admin/submissions/${encodeURIComponent(submissionId)}`,
       { method: 'DELETE' }
     );
     const data = await resp.json();
@@ -289,13 +307,17 @@ async function deleteSelectedSubmission() {
       throw new Error(data.error || 'Failed to delete submission.');
     }
 
-    hideSubmissionDetail();
+    if (deletingSelectedSubmission) {
+      hideSubmissionDetail();
+    }
     await inspectUserSubmissions(state.selectedUserId, state.selectedUsername);
   } catch (error) {
     dom.submissionsError.textContent = error.message || 'Could not delete this submission.';
     dom.submissionsError.hidden = false;
-    dom.deleteSubmissionBtn.disabled = false;
-    dom.deleteSubmissionBtn.textContent = 'Delete Submission';
+    if (deletingSelectedSubmission) {
+      dom.deleteSubmissionBtn.disabled = false;
+      dom.deleteSubmissionBtn.textContent = 'Delete Submission';
+    }
   }
 }
 
@@ -575,7 +597,7 @@ function initEventListeners() {
     }
   });
   dom.deleteSubmissionBtn.addEventListener('click', async () => {
-    await deleteSelectedSubmission();
+    await deleteSubmission(state.selectedSubmissionId);
   });
 
   dom.confirmModal.addEventListener('click', (event) => {
