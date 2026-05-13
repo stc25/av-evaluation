@@ -5,6 +5,7 @@ const dom = {};
 const state = {
   selectedUserId: '',
   selectedUsername: '',
+  selectedSubmissionId: '',
 };
 
 function apiFetch(path, opts = {}) {
@@ -208,6 +209,7 @@ async function openSubmissionDetail(submissionId) {
       throw new Error(data.error || 'Failed to load submission');
     }
 
+    state.selectedSubmissionId = submissionId;
     dom.submissionDetail.hidden = false;
     dom.submissionDetailTitle.textContent = data.original_filename || 'Previous submission';
     dom.submissionDetailMeta.textContent = [
@@ -225,6 +227,9 @@ async function openSubmissionDetail(submissionId) {
       dom.submissionMediaLink.hidden = true;
       dom.submissionMediaLink.removeAttribute('href');
     }
+    dom.deleteSubmissionBtn.hidden = false;
+    dom.deleteSubmissionBtn.disabled = false;
+    dom.deleteSubmissionBtn.textContent = 'Delete Submission';
   } catch (error) {
     dom.submissionsError.textContent = error.message || 'Could not load submission details.';
     dom.submissionsError.hidden = false;
@@ -232,6 +237,7 @@ async function openSubmissionDetail(submissionId) {
 }
 
 function hideSubmissionDetail() {
+  state.selectedSubmissionId = '';
   dom.submissionDetail.hidden = true;
   dom.submissionDetailTitle.textContent = 'Submission';
   dom.submissionDetailMeta.textContent = '';
@@ -239,11 +245,15 @@ function hideSubmissionDetail() {
   dom.submissionTranscript.textContent = '';
   dom.submissionMediaLink.hidden = true;
   dom.submissionMediaLink.removeAttribute('href');
+  dom.deleteSubmissionBtn.hidden = true;
+  dom.deleteSubmissionBtn.disabled = false;
+  dom.deleteSubmissionBtn.textContent = 'Delete Submission';
 }
 
 function resetSubmissionInspector(message) {
   state.selectedUserId = '';
   state.selectedUsername = '';
+  state.selectedSubmissionId = '';
   dom.selectedUserLabel.textContent = message;
   dom.refreshSubmissionsBtn.hidden = true;
   dom.submissionsError.hidden = true;
@@ -251,6 +261,42 @@ function resetSubmissionInspector(message) {
   dom.submissionsList.hidden = true;
   dom.submissionsList.innerHTML = '';
   hideSubmissionDetail();
+}
+
+async function deleteSelectedSubmission() {
+  if (!state.selectedSubmissionId || !state.selectedUserId) {
+    return;
+  }
+
+  const submissionLabel = dom.submissionDetailTitle.textContent || 'this submission';
+  const confirmed = await showConfirmModal(
+    'Delete Submission',
+    `Delete '${submissionLabel}' for '${state.selectedUsername}'? This cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  dom.deleteSubmissionBtn.disabled = true;
+  dom.deleteSubmissionBtn.textContent = 'Deleting...';
+
+  try {
+    const resp = await apiFetch(
+      `/api/admin/submissions/${encodeURIComponent(state.selectedSubmissionId)}`,
+      { method: 'DELETE' }
+    );
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.error || 'Failed to delete submission.');
+    }
+
+    hideSubmissionDetail();
+    await inspectUserSubmissions(state.selectedUserId, state.selectedUsername);
+  } catch (error) {
+    dom.submissionsError.textContent = error.message || 'Could not delete this submission.';
+    dom.submissionsError.hidden = false;
+    dom.deleteSubmissionBtn.disabled = false;
+    dom.deleteSubmissionBtn.textContent = 'Delete Submission';
+  }
 }
 
 async function handleAddUser(event) {
@@ -528,6 +574,9 @@ function initEventListeners() {
       await inspectUserSubmissions(state.selectedUserId, state.selectedUsername, true);
     }
   });
+  dom.deleteSubmissionBtn.addEventListener('click', async () => {
+    await deleteSelectedSubmission();
+  });
 
   dom.confirmModal.addEventListener('click', (event) => {
     if (event.target === dom.confirmModal) {
@@ -566,6 +615,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   dom.submissionDetailTitle = document.getElementById('submission-detail-title');
   dom.submissionDetailMeta = document.getElementById('submission-detail-meta');
   dom.submissionMediaLink = document.getElementById('submission-media-link');
+  dom.deleteSubmissionBtn = document.getElementById('delete-submission-btn');
   dom.submissionFeedback = document.getElementById('submission-feedback');
   dom.submissionTranscript = document.getElementById('submission-transcript');
 

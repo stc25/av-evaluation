@@ -221,6 +221,37 @@ def get_submission(submission_id):
     })
 
 
+@admin_bp.route('/submissions/<submission_id>', methods=['DELETE'])
+@admin_required
+def delete_submission(submission_id):
+    with get_db() as conn:
+        row = conn.execute(
+            '''SELECT s.submission_id, s.original_filename, s.stored_filename,
+                      u.username
+               FROM submissions s
+               JOIN users u ON u.user_id = s.user_id
+               WHERE s.submission_id = ?''',
+            (submission_id,)
+        ).fetchone()
+
+        if not row:
+            return jsonify({'error': 'Submission not found'}), 404
+
+        conn.execute(
+            'DELETE FROM submissions WHERE submission_id = ?',
+            (submission_id,)
+        )
+
+    _remove_submission_files([row['stored_filename']])
+
+    return jsonify({
+        'message': (
+            f"Submission '{row['original_filename'] or row['submission_id']}' "
+            f"for user '{row['username']}' deleted"
+        )
+    })
+
+
 @admin_bp.route('/submissions/<submission_id>/media', methods=['GET'])
 @admin_required
 def get_submission_media(submission_id):
