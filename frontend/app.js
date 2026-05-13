@@ -22,6 +22,7 @@ const state = {
   recordingTimerId: null,
   recordingStartedAt: 0,
   recordingWarningShown: false,
+  recordingRetrySuggested: false,
 };
 
 const dom = {};
@@ -207,8 +208,8 @@ async function enableCameraPreview() {
   clearFile();
 
   if (state.mediaStream && state.recordingState === 'camera-ready') {
-    updateActionAvailability();
-    return;
+    stopMediaTracks();
+    state.recordingState = 'idle';
   }
 
   let stream = null;
@@ -239,6 +240,7 @@ async function enableCameraPreview() {
       'Camera and microphone are ready. Click Start Recording when you are ready.';
     dom.recordingTimer.hidden = true;
     dom.recordingTimer.textContent = 'Time remaining: 15:00';
+    state.recordingRetrySuggested = false;
     clearRecordingWarning();
     updateActionAvailability();
   } catch (error) {
@@ -247,6 +249,7 @@ async function enableCameraPreview() {
     }
     state.mediaStream = null;
     state.recordingState = 'idle';
+    state.recordingRetrySuggested = shouldSuggestRecordingRetry(error);
     dom.recordingPreviewLive.hidden = true;
     dom.recordingPreviewLive.srcObject = null;
     dom.recordingStatus.textContent = 'Unable to start camera preview.';
@@ -255,6 +258,24 @@ async function enableCameraPreview() {
     showRecordingError(buildRecordingStartError(error));
     updateActionAvailability();
   }
+}
+
+async function releaseCameraAndRetry() {
+  if (state.uploadInFlight || state.recordingState === 'recording' || state.recordingState === 'stopping') {
+    return;
+  }
+
+  clearRecordingError();
+  state.recordingRetrySuggested = false;
+  stopMediaTracks();
+  state.recordingState = 'idle';
+  dom.recordingPreviewLive.hidden = true;
+  dom.recordingPreviewLive.srcObject = null;
+  dom.recordingStatus.textContent = 'Releasing camera and microphone, then trying again...';
+  updateActionAvailability();
+
+  await new Promise((resolve) => window.setTimeout(resolve, 400));
+  await enableCameraPreview();
 }
 
 async function submitMedia(file, submissionSource) {
@@ -613,6 +634,7 @@ function resetRecordingUi() {
   clearRecordingWarning();
   clearRecordingError();
   state.recordingWarningShown = false;
+  state.recordingRetrySuggested = false;
   state.recordingState = 'idle';
   updateActionAvailability();
 }
@@ -683,6 +705,11 @@ function clearRecordingError() {
   dom.recordingError.hidden = true;
 }
 
+function shouldSuggestRecordingRetry(error) {
+  const name = error?.name || '';
+  return name === 'NotReadableError' || name === 'TrackStartError';
+}
+
 function formatRecordingTime(milliseconds) {
   const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -699,7 +726,7 @@ function buildRecordingStartError(error) {
     return 'No usable webcam or microphone was found on this device.';
   }
   if (name === 'NotReadableError' || name === 'TrackStartError') {
-    return 'Your webcam or microphone is already in use by another application.';
+    return 'The webcam or microphone could not be started because another app or browser tab may still be using it. Close anything using the camera or mic, then try Release Camera and Retry.';
   }
   if (name === 'NotSupportedError') {
     return 'This browser could not start a compatible recording format. Try Chrome or Edge, or upload a file instead.';
@@ -859,10 +886,16 @@ function updateActionAvailability() {
   const recordingBusy = state.recordingState === 'recording' || state.recordingState === 'stopping';
   const cameraReady = state.recordingState === 'camera-ready';
   const recordingPreviewReady = state.recordingState === 'preview' && state.recordedFile;
+  const showReleaseRetry = !recordingBusy
+    && !recordingPreviewReady
+    && !state.uploadInFlight
+    && state.recordingRetrySuggested;
   dom.feedbackBtn.disabled = !state.selectedFile || state.uploadInFlight || recordingBusy;
   dom.clearBtn.disabled = state.uploadInFlight || recordingBusy;
   dom.enableCameraBtn.hidden = recordingBusy || recordingPreviewReady;
   dom.enableCameraBtn.disabled = !state.recordingSupported || state.uploadInFlight || cameraReady;
+  dom.releaseCameraBtn.hidden = !showReleaseRetry;
+  dom.releaseCameraBtn.disabled = state.uploadInFlight;
   dom.startRecordingBtn.hidden = recordingBusy || recordingPreviewReady;
   dom.startRecordingBtn.disabled = !cameraReady || state.uploadInFlight;
   dom.stopRecordingBtn.hidden = state.recordingState !== 'recording';
@@ -945,6 +978,9 @@ function initEventListeners() {
   dom.enableCameraBtn.addEventListener('click', async () => {
     await enableCameraPreview();
   });
+  dom.releaseCameraBtn.addEventListener('click', async () => {
+    await releaseCameraAndRetry();
+  });
   dom.startRecordingBtn.addEventListener('click', async () => {
     await startRecordingSession();
   });
@@ -979,6 +1015,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   dom.recordingWarning = document.getElementById('recording-warning');
   dom.recordingError = document.getElementById('recording-error');
   dom.enableCameraBtn = document.getElementById('enable-camera-btn');
+  dom.releaseCameraBtn = document.getElementById('release-camera-btn');
   dom.startRecordingBtn = document.getElementById('start-recording-btn');
   dom.stopRecordingBtn = document.getElementById('stop-recording-btn');
   dom.discardRecordingBtn = document.getElementById('discard-recording-btn');
