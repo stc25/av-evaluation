@@ -9,6 +9,7 @@ const WARNING_THRESHOLD_MS = 14 * 60 * 1000;
 const state = {
   currentUser: null,
   selectedFile: null,
+  selectedFileSubmitted: false,
   selectedFileUrl: null,
   submissions: [],
   uploadInFlight: false,
@@ -18,6 +19,7 @@ const state = {
   mediaRecorder: null,
   recordedChunks: [],
   recordedFile: null,
+  recordedFileSubmitted: false,
   recordedFileUrl: null,
   recordingTimerId: null,
   recordingStartedAt: 0,
@@ -146,6 +148,7 @@ function handleFileSelect(file) {
   clearUploadError();
   hideFeedback();
   state.selectedFile = file;
+  state.selectedFileSubmitted = false;
 
   cleanupSelectedFileUrl();
   state.selectedFileUrl = URL.createObjectURL(file);
@@ -161,6 +164,7 @@ function handleFileSelect(file) {
 
 function clearFile() {
   state.selectedFile = null;
+  state.selectedFileSubmitted = false;
   cleanupSelectedFileUrl();
   dom.fileInput.value = '';
   dom.fileInfo.hidden = true;
@@ -195,12 +199,12 @@ function formatSize(bytes) {
 }
 
 async function obtainFeedback() {
-  if (!state.selectedFile) return;
+  if (!state.selectedFile || state.selectedFileSubmitted) return;
   await submitMedia(state.selectedFile, 'upload');
 }
 
 async function uploadRecordedMedia() {
-  if (!state.recordedFile) return;
+  if (!state.recordedFile || state.recordedFileSubmitted) return;
   await submitMedia(state.recordedFile, 'recorded');
 }
 
@@ -231,6 +235,7 @@ async function enableCameraPreview() {
     state.recordingState = 'camera-ready';
     state.recordedChunks = [];
     state.recordedFile = null;
+    state.recordedFileSubmitted = false;
     cleanupRecordedFileUrl();
 
     dom.recordingPreviewPlayback.pause();
@@ -308,6 +313,11 @@ async function submitMedia(file, submissionSource) {
     });
 
     if (ok) {
+      if (submissionSource === 'recorded') {
+        state.recordedFileSubmitted = true;
+      } else {
+        state.selectedFileSubmitted = true;
+      }
       state.activeSubmissionId = data.submission_id || null;
       state.activeSubmissionStatus = data.status || '';
       if (data.status === 'completed') {
@@ -536,6 +546,7 @@ async function startRecordingSession() {
     state.recordingWarningShown = false;
     state.recordingState = 'recording';
     state.recordedFile = null;
+    state.recordedFileSubmitted = false;
     cleanupRecordedFileUrl();
 
     recorder.ondataavailable = handleRecorderDataAvailable;
@@ -628,6 +639,7 @@ function handleRecorderStop() {
     type: mimeType || 'video/webm',
     lastModified: Date.now(),
   });
+  state.recordedFileSubmitted = false;
   cleanupRecordedFileUrl();
   state.recordedFileUrl = URL.createObjectURL(state.recordedFile);
 
@@ -667,6 +679,7 @@ function discardRecording() {
   clearRecordingError();
   clearRecordingWarning();
   state.recordedFile = null;
+  state.recordedFileSubmitted = false;
   cleanupRecordedFileUrl();
   dom.recordingPreviewPlayback.pause();
   dom.recordingPreviewPlayback.removeAttribute('src');
@@ -696,6 +709,7 @@ function resetRecordingUi() {
   state.mediaRecorder = null;
   state.recordedChunks = [];
   state.recordedFile = null;
+  state.recordedFileSubmitted = false;
   cleanupRecordedFileUrl();
   dom.recordingPreviewLive.hidden = true;
   dom.recordingPreviewLive.srcObject = null;
@@ -1007,7 +1021,7 @@ function updateActionAvailability() {
     && !recordingPreviewReady
     && !state.uploadInFlight
     && state.recordingRetrySuggested;
-  dom.feedbackBtn.disabled = !state.selectedFile || state.uploadInFlight || recordingBusy;
+  dom.feedbackBtn.disabled = !state.selectedFile || state.selectedFileSubmitted || state.uploadInFlight || recordingBusy;
   dom.clearBtn.disabled = state.uploadInFlight || recordingBusy;
   dom.enableCameraBtn.hidden = recordingBusy || recordingPreviewReady;
   dom.enableCameraBtn.disabled = !state.recordingSupported || state.uploadInFlight || cameraReady;
@@ -1019,7 +1033,7 @@ function updateActionAvailability() {
   dom.discardRecordingBtn.hidden = !recordingPreviewReady;
   dom.discardRecordingBtn.disabled = state.uploadInFlight;
   dom.uploadRecordingBtn.hidden = !recordingPreviewReady;
-  dom.uploadRecordingBtn.disabled = state.uploadInFlight;
+  dom.uploadRecordingBtn.disabled = state.uploadInFlight || state.recordedFileSubmitted;
   dom.fileInput.disabled = state.uploadInFlight || recordingBusy;
   dom.dropZone.classList.toggle('drop-zone-disabled', state.uploadInFlight || recordingBusy);
   if (state.uploadInFlight || recordingBusy) {
