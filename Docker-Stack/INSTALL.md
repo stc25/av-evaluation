@@ -21,7 +21,9 @@ Everything in the application runtime is containerized except Ollama:
 
 - `caddy` handles inbound `80` and `443`
 - `app` runs the Flask application under Gunicorn inside Docker
+- `worker` processes queued submissions inside Docker
 - `mariadb` runs inside Docker
+- `valkey` provides the internal queue backend inside Docker
 - uploaded media is stored in Docker volumes
 
 The Docker host does **not** need local Python, a local virtual environment, or host-installed FFmpeg for the app to run.
@@ -153,6 +155,9 @@ UPLOADS_DIR=/data/uploads
 WHISPER_MODEL_SIZE=medium
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
+VALKEY_URL=redis://valkey:6379/0
+RQ_QUEUE=submissions
+QUEUE_SYNC=false
 APP_DEBUG=false
 APP_LOG_LEVEL=INFO
 GUNICORN_LOG_LEVEL=info
@@ -223,7 +228,9 @@ This stack is secure by default in these ways:
 
 - only Caddy publishes ports to the host
 - the `app` service is only exposed internally on the Docker network
+- the `worker` service is only exposed internally on the Docker network
 - the `mariadb` service is only exposed internally on the Docker network
+- the `valkey` service is only exposed internally on the Docker network
 - Ollama is accessed as an outbound remote dependency rather than exposed through this stack
 - uploads are stored in a Docker volume, not in a public web root
 - Flask session cookies are marked `Secure` when `SESSION_COOKIE_SECURE=true`
@@ -231,7 +238,9 @@ This stack is secure by default in these ways:
 Do not add `ports:` mappings to:
 
 - `app`
+- `worker`
 - `mariadb`
+- `valkey`
 
 That would weaken the deployment.
 
@@ -259,6 +268,12 @@ For focused application debugging:
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml logs -f app
+```
+
+For focused worker debugging:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f worker
 ```
 
 For focused reverse-proxy debugging:
@@ -337,6 +352,7 @@ If the `app` service fails to start, check these first:
 
 - `DATABASE_URL` matches `MARIADB_DATABASE`, `MARIADB_USER`, and `MARIADB_PASSWORD`
 - `OLLAMA_URL` is reachable from the app container
+- `VALKEY_URL` points at the internal `valkey` service or another reachable queue endpoint
 - `SESSION_COOKIE_SECURE` is not left at `true` during plain-HTTP local testing
 - `CADDY_SITE_ADDRESS` matches whether you are doing local HTTP testing or real HTTPS deployment
 

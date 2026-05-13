@@ -33,6 +33,9 @@ services:
       WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-medium}
       WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
       WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
+      RQ_QUEUE: ${RQ_QUEUE:-submissions}
+      QUEUE_SYNC: ${QUEUE_SYNC:-false}
       APP_DEBUG: ${APP_DEBUG:-false}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       GUNICORN_LOG_LEVEL: ${GUNICORN_LOG_LEVEL:-info}
@@ -48,6 +51,8 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
+      valkey:
+        condition: service_started
     healthcheck:
       test:
         - CMD-SHELL
@@ -56,6 +61,46 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Docker-Stack/backend/Dockerfile
+    working_dir: /app/backend
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me}
+      DATABASE_URL: ${DATABASE_URL:-mariadb://app_user:app_password@mariadb:3306/av_evaluation}
+      UPLOADS_DIR: ${UPLOADS_DIR:-/data/uploads}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama.example.internal:11434/api/generate}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:latest}
+      WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-medium}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      VALKEY_URL: ${VALKEY_URL:-redis://valkey:6379/0}
+      RQ_QUEUE: ${RQ_QUEUE:-submissions}
+      QUEUE_SYNC: ${QUEUE_SYNC:-false}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
+    command:
+      - sh
+      - /opt/docker-scripts/worker-entrypoint.sh
+    volumes:
+      - uploads_data:/data/uploads
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command:
+      - valkey-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
     restart: unless-stopped
 
   mariadb:

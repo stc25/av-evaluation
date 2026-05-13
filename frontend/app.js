@@ -23,6 +23,10 @@ const state = {
   recordingStartedAt: 0,
   recordingWarningShown: false,
   recordingRetrySuggested: false,
+  submissionPollTimerId: null,
+  historyPollInFlight: false,
+  activeSubmissionId: null,
+  activeSubmissionStatus: '',
 };
 
 const dom = {};
@@ -91,6 +95,9 @@ function showLoginView() {
   dom.appView.hidden = true;
   dom.loginForm.reset();
   setLoginError('');
+  stopSubmissionPolling();
+  state.activeSubmissionId = null;
+  state.activeSubmissionStatus = '';
   clearHistoryMessages();
   dom.historyList.innerHTML = '';
   dom.historyEmpty.hidden = true;
@@ -301,10 +308,16 @@ async function submitMedia(file, submissionSource) {
     });
 
     if (ok) {
-      showFeedback(data.feedback, {
-        title: data.original_filename || file.name,
-        meta: buildSubmissionMeta(data),
-      });
+      state.activeSubmissionId = data.submission_id || null;
+      state.activeSubmissionStatus = data.status || '';
+      if (data.status === 'completed') {
+        showFeedback(data.feedback, {
+          title: data.original_filename || file.name,
+          meta: buildSubmissionMeta(data),
+        });
+      } else {
+        showSubmissionStatus(data);
+      }
       await loadSubmissionHistory();
     } else if (submissionSource === 'recorded') {
       showRecordingError(data.error || 'An unexpected error occurred. Please try again.');
@@ -377,6 +390,8 @@ async function loadSubmissionHistory() {
 
     state.submissions = Array.isArray(data) ? data : [];
     renderSubmissionHistory();
+    ensureSubmissionPolling();
+    await syncActiveSubmissionDetail();
   } catch {
     showHistoryError('Could not load your previous feedback.');
   }
@@ -407,6 +422,7 @@ function renderSubmissionHistory() {
 
 async function openSubmissionFeedback(submissionId) {
   clearHistoryMessages();
+  state.activeSubmissionId = submissionId;
 
   try {
     const resp = await apiFetch(`/api/submissions/${encodeURIComponent(submissionId)}`);
@@ -417,12 +433,70 @@ async function openSubmissionFeedback(submissionId) {
       return;
     }
 
-    showFeedback(data.feedback, {
-      title: data.original_filename || 'Previous Feedback',
-      meta: buildSubmissionMeta(data),
-    });
+    state.activeSubmissionStatus = data.status || '';
+    if (data.status === 'completed') {
+      showFeedback(data.feedback, {
+        title: data.original_filename || 'Previous Feedback',
+        meta: buildSubmissionMeta(data),
+      });
+    } else {
+      showSubmissionStatus(data);
+    }
   } catch {
     showHistoryError('Could not load this feedback.');
+  }
+}
+
+function hasIncompleteSubmission(submission) {
+  return submission.status === 'queued' || submission.status === 'processing';
+}
+
+function ensureSubmissionPolling() {
+  const needsPolling = state.submissions.some(hasIncompleteSubmission);
+  if (needsPolling && !state.submissionPollTimerId) {
+    state.submissionPollTimerId = window.setInterval(() => {
+      void pollIncompleteSubmissions();
+    }, 10000);
+    return;
+  }
+
+  if (!needsPolling) {
+    stopSubmissionPolling();
+  }
+}
+
+function stopSubmissionPolling() {
+  if (state.submissionPollTimerId) {
+    window.clearInterval(state.submissionPollTimerId);
+    state.submissionPollTimerId = null;
+  }
+}
+
+async function pollIncompleteSubmissions() {
+  if (state.historyPollInFlight || state.uploadInFlight || !state.currentUser) {
+    return;
+  }
+
+  state.historyPollInFlight = true;
+  try {
+    await loadSubmissionHistory();
+  } finally {
+    state.historyPollInFlight = false;
+  }
+}
+
+async function syncActiveSubmissionDetail() {
+  if (!state.activeSubmissionId) {
+    return;
+  }
+
+  const submission = state.submissions.find((item) => item.submission_id === state.activeSubmissionId);
+  if (!submission) {
+    return;
+  }
+
+  if (submission.status !== state.activeSubmissionStatus || hasIncompleteSubmission(submission)) {
+    await openSubmissionFeedback(submission.submission_id);
   }
 }
 
@@ -823,12 +897,31 @@ function showFeedback(markdown, opts = {}) {
   }, 50);
 }
 
+function showSubmissionStatus(submission) {
+  const title = submission.original_filename || 'Submission';
+  const message = buildSubmissionStatusMessage(submission);
+  dom.feedbackTitle.textContent = `Submission status for ${title}`;
+  dom.feedbackMeta.textContent = buildSubmissionMeta(submission);
+  dom.feedbackMeta.hidden = false;
+  dom.feedbackContent.innerHTML = `
+    <p>${escapeHtml(message)}</p>
+    ${submission.error_message ? `<p class="error-msg">${escapeHtml(submission.error_message)}</p>` : ''}
+  `;
+  dom.feedbackContainer.hidden = false;
+
+  setTimeout(() => {
+    dom.feedbackContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 50);
+}
+
 function hideFeedback() {
   dom.feedbackContainer.hidden = true;
   dom.feedbackTitle.textContent = 'Your Feedback';
   dom.feedbackMeta.textContent = '';
   dom.feedbackMeta.hidden = true;
   dom.feedbackContent.innerHTML = '';
+  state.activeSubmissionId = null;
+  state.activeSubmissionStatus = '';
 }
 
 function buildSubmissionMeta(submission) {
@@ -841,6 +934,9 @@ function buildSubmissionMeta(submission) {
   }
   if (submission.submission_source) {
     parts.push(formatSourceLabel(submission.submission_source));
+  }
+  if (submission.status) {
+    parts.push(formatStatusLabel(submission.status));
   }
   if (submission.has_media === false) {
     parts.push('Media unavailable');
@@ -871,6 +967,27 @@ function formatDuration(durationSeconds) {
 
 function formatSourceLabel(source) {
   return source === 'recorded' ? 'Recorded in app' : 'Uploaded file';
+}
+
+function formatStatusLabel(status) {
+  if (status === 'queued') return 'Queued';
+  if (status === 'processing') return 'Processing';
+  if (status === 'completed') return 'Completed';
+  if (status === 'failed') return 'Failed';
+  return status;
+}
+
+function buildSubmissionStatusMessage(submission) {
+  if (submission.status === 'queued') {
+    return 'Your presentation has been queued for transcription and feedback. You can close this page and come back later.';
+  }
+  if (submission.status === 'processing') {
+    return 'Your presentation is currently being transcribed and analysed. You can leave this page and check back later.';
+  }
+  if (submission.status === 'failed') {
+    return 'This submission could not be processed successfully.';
+  }
+  return 'The submission is being updated.';
 }
 
 function escapeHtml(str) {

@@ -43,6 +43,20 @@ def _translate_query(query):
     return query.replace('?', '%s')
 
 
+def _is_duplicate_column_error(exc):
+    message = str(exc)
+    return 'Duplicate column name' in message or 'duplicate column name' in message
+
+
+def _safe_add_column(conn, query):
+    try:
+        conn.execute(query)
+    except Exception as exc:
+        if _is_duplicate_column_error(exc):
+            return
+        raise
+
+
 def _get_sqlite_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -106,6 +120,8 @@ def _init_sqlite():
                 stored_filename TEXT NOT NULL DEFAULT '',
                 duration_seconds REAL NOT NULL DEFAULT 0,
                 submission_source TEXT NOT NULL DEFAULT 'upload',
+                status TEXT NOT NULL DEFAULT 'queued',
+                error_message TEXT,
                 transcript TEXT,
                 feedback TEXT,
                 submitted_at TEXT NOT NULL,
@@ -135,6 +151,8 @@ def _init_mariadb():
                 stored_filename VARCHAR(255) NOT NULL DEFAULT '',
                 duration_seconds DOUBLE NOT NULL DEFAULT 0,
                 submission_source VARCHAR(32) NOT NULL DEFAULT 'upload',
+                status VARCHAR(32) NOT NULL DEFAULT 'queued',
+                error_message TEXT NULL,
                 transcript LONGTEXT NULL,
                 feedback LONGTEXT NULL,
                 submitted_at VARCHAR(64) NOT NULL,
@@ -151,20 +169,28 @@ def _ensure_submission_columns_sqlite(conn):
         for row in conn.execute('PRAGMA table_info(submissions)').fetchall()
     }
     if 'original_filename' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             "ALTER TABLE submissions ADD COLUMN original_filename TEXT NOT NULL DEFAULT ''"
         )
     if 'stored_filename' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             "ALTER TABLE submissions ADD COLUMN stored_filename TEXT NOT NULL DEFAULT ''"
         )
     if 'duration_seconds' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             'ALTER TABLE submissions ADD COLUMN duration_seconds REAL NOT NULL DEFAULT 0'
         )
     if 'submission_source' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             "ALTER TABLE submissions ADD COLUMN submission_source TEXT NOT NULL DEFAULT 'upload'"
+        )
+    if 'status' not in columns:
+        _safe_add_column(conn,
+            "ALTER TABLE submissions ADD COLUMN status TEXT NOT NULL DEFAULT 'queued'"
+        )
+    if 'error_message' not in columns:
+        _safe_add_column(conn,
+            'ALTER TABLE submissions ADD COLUMN error_message TEXT'
         )
 
 
@@ -178,20 +204,28 @@ def _ensure_submission_columns_mariadb(conn):
     columns = {row['COLUMN_NAME'] for row in rows}
 
     if 'original_filename' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             "ALTER TABLE submissions ADD COLUMN original_filename VARCHAR(255) NOT NULL DEFAULT ''"
         )
     if 'stored_filename' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             "ALTER TABLE submissions ADD COLUMN stored_filename VARCHAR(255) NOT NULL DEFAULT ''"
         )
     if 'duration_seconds' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             'ALTER TABLE submissions ADD COLUMN duration_seconds DOUBLE NOT NULL DEFAULT 0'
         )
     if 'submission_source' not in columns:
-        conn.execute(
+        _safe_add_column(conn,
             "ALTER TABLE submissions ADD COLUMN submission_source VARCHAR(32) NOT NULL DEFAULT 'upload'"
+        )
+    if 'status' not in columns:
+        _safe_add_column(conn,
+            "ALTER TABLE submissions ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'queued'"
+        )
+    if 'error_message' not in columns:
+        _safe_add_column(conn,
+            'ALTER TABLE submissions ADD COLUMN error_message TEXT NULL'
         )
 
 

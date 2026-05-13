@@ -214,8 +214,8 @@ async function openSubmissionDetail(submissionId) {
       data.username,
       buildSubmissionMeta(data),
     ].filter(Boolean).join(' | ');
-    dom.submissionFeedback.textContent = data.feedback || 'No feedback stored.';
-    dom.submissionTranscript.textContent = data.transcript || 'No transcript stored.';
+    dom.submissionFeedback.textContent = data.feedback || statusFallbackMessage(data, 'feedback');
+    dom.submissionTranscript.textContent = data.transcript || statusFallbackMessage(data, 'transcript');
 
     if (data.has_media) {
       dom.submissionMediaLink.hidden = false;
@@ -477,7 +477,35 @@ function buildSubmissionMeta(submission) {
   if (submission.submission_source) {
     parts.push(formatSourceLabel(submission.submission_source));
   }
+  if (submission.status) {
+    parts.push(formatStatusLabel(submission.status));
+  }
   return parts.join(' | ');
+}
+
+function formatStatusLabel(status) {
+  if (status === 'queued') return 'Queued';
+  if (status === 'processing') return 'Processing';
+  if (status === 'completed') return 'Completed';
+  if (status === 'failed') return 'Failed';
+  return status;
+}
+
+function statusFallbackMessage(submission, kind) {
+  if (submission.status === 'queued') {
+    return kind === 'feedback'
+      ? 'Feedback has not been generated yet. This submission is queued.'
+      : 'Transcript has not been generated yet. This submission is queued.';
+  }
+  if (submission.status === 'processing') {
+    return kind === 'feedback'
+      ? 'Feedback is still being generated.'
+      : 'Transcript is still being generated.';
+  }
+  if (submission.status === 'failed') {
+    return submission.error_message || 'This submission failed during processing.';
+  }
+  return kind === 'feedback' ? 'No feedback stored.' : 'No transcript stored.';
 }
 
 function escapeHtml(str) {

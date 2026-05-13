@@ -9,6 +9,8 @@ It upgrades the runtime from the earlier transitional SQLite-based container set
 - `Caddy`
 - the current `Flask` app under `Gunicorn`
 - `MariaDB`
+- `Valkey`
+- one background `worker`
 - persistent upload storage
 - external `Ollama`
 - `ffprobe`-based media duration validation
@@ -22,6 +24,13 @@ Browser
   -> Caddy
     -> Flask app container
          -> MariaDB
+         -> Valkey
+         -> persistent uploads volume
+         -> remote Ollama endpoint
+         -> faster-whisper + ffprobe inside the app container
+    -> worker container
+         -> MariaDB
+         -> Valkey
          -> persistent uploads volume
          -> remote Ollama endpoint
          -> faster-whisper + ffprobe inside the app container
@@ -61,10 +70,18 @@ Responsibilities:
 - serves the current frontend from Flask
 - handles auth, admin, uploads, submission history, and media access
 - validates duration using `ffprobe`
-- runs `faster-whisper`
-- calls Ollama through `OLLAMA_URL`
+- stores submissions immediately with queued/processing/completed/failed status
 - reads and writes data in MariaDB
 - stores uploaded media in a persistent Docker volume
+
+### `worker`
+
+Responsibilities:
+
+- consumes queued submission jobs
+- runs `faster-whisper`
+- calls Ollama through `OLLAMA_URL`
+- writes transcript, feedback, and failure state back to MariaDB
 
 Base image recommendation:
 
@@ -112,6 +129,8 @@ For MariaDB, the current schema now includes:
 - `stored_filename`
 - `duration_seconds`
 - `submission_source`
+- `status`
+- `error_message`
 - `transcript`
 - `feedback`
 - `submitted_at`
@@ -140,6 +159,12 @@ Environment variables used by the production Docker stack:
 - `WHISPER_MODEL_SIZE`
 - `WHISPER_DEVICE`
 - `WHISPER_COMPUTE_TYPE`
+- `VALKEY_URL`
+  - queue backend URL, typically `redis://valkey:6379/0`
+- `RQ_QUEUE`
+  - queue name for submission jobs
+- `QUEUE_SYNC`
+  - should be `false` in Docker so the worker handles processing asynchronously
 - `APP_DEBUG`
   - enables Flask debug-style exception propagation for controlled testing
 - `APP_LOG_LEVEL`
@@ -182,6 +207,8 @@ The stack now uses:
 
 - `mariadb_data`
   - MariaDB data directory
+- `valkey`
+  - queue backend service for `RQ`
 - `uploads_data`
   - uploaded media files
 - `caddy_data`
@@ -231,6 +258,7 @@ Before running, update at least:
 - `DATABASE_URL` if you want different DB credentials or hostnames
 - `MARIADB_PASSWORD`
 - `MARIADB_ROOT_PASSWORD`
+- `VALKEY_URL`
 - `OLLAMA_URL`
 - `OLLAMA_MODEL`
 
@@ -238,6 +266,7 @@ Example:
 
 ```text
 DATABASE_URL=mariadb://app_user:strong-password@mariadb:3306/av_evaluation
+VALKEY_URL=redis://valkey:6379/0
 OLLAMA_URL=http://ollama.example.internal:11434/api/generate
 ```
 
@@ -268,15 +297,15 @@ This stack is now stronger than the earlier SQLite-based runtime because it uses
 
 - MariaDB instead of SQLite
 - a separate DB container
+- a Valkey-backed queue
+- a worker container
 - persistent uploads separate from DB state
 - a real reverse proxy in front of Gunicorn
 
-However, the app still has these current-codebase limitations:
+The biggest remaining limitations are:
 
-- synchronous request handling for transcription and feedback
-- no background queue
-- no worker container
 - no object storage
+- no retry/backoff strategy around queued jobs
 - no horizontal scaling strategy for long-running inference
 
 Operationally, the stack is easier to diagnose than before because:
@@ -285,6 +314,7 @@ Operationally, the stack is easier to diagnose than before because:
 - Gunicorn error logs go to container stderr
 - Flask logging can be raised with `APP_LOG_LEVEL`
 - startup behavior can be made more verbose with `APP_DEBUG` and `GUNICORN_LOG_LEVEL`
+- worker-side queue processing can be diagnosed separately from the web app
 
 So this stack is a **production-oriented upgrade for the current app**, but not yet the final long-term architecture.
 
@@ -312,6 +342,8 @@ The `Docker-Stack` folder now supports a more production-ready deployment of the
 - Gunicorn
 - Flask
 - MariaDB
+- Valkey
+- one worker container
 - persistent uploads
 - external Ollama
 - `ffprobe`-based duration validation

@@ -159,7 +159,8 @@ def list_user_submissions(user_id):
 
         rows = conn.execute(
             '''SELECT submission_id, original_filename, stored_filename,
-                      duration_seconds, submission_source, submitted_at
+                      duration_seconds, submission_source, status, error_message,
+                      submitted_at
                FROM submissions
                WHERE user_id = ?
                ORDER BY submitted_at DESC''',
@@ -177,6 +178,8 @@ def list_user_submissions(user_id):
                 'has_media': bool(row['stored_filename']),
                 'duration_seconds': row['duration_seconds'],
                 'submission_source': row['submission_source'],
+                'status': row['status'],
+                'error_message': row['error_message'],
             }
             for row in rows
         ],
@@ -189,7 +192,8 @@ def get_submission(submission_id):
     with get_db() as conn:
         row = conn.execute(
             '''SELECT s.submission_id, s.original_filename, s.stored_filename,
-                      s.duration_seconds, s.submission_source,
+                      s.duration_seconds, s.submission_source, s.status,
+                      s.error_message,
                       s.transcript, s.feedback, s.submitted_at,
                       u.user_id, u.username
                FROM submissions s
@@ -209,6 +213,8 @@ def get_submission(submission_id):
         'has_media': bool(row['stored_filename']),
         'duration_seconds': row['duration_seconds'],
         'submission_source': row['submission_source'],
+        'status': row['status'],
+        'error_message': row['error_message'],
         'transcript': row['transcript'],
         'feedback': row['feedback'],
         'submitted_at': row['submitted_at'],
