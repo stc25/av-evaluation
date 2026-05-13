@@ -230,7 +230,11 @@ async function enableCameraPreview() {
     dom.recordingPreviewPlayback.hidden = true;
     dom.recordingPreviewLive.srcObject = stream;
     dom.recordingPreviewLive.hidden = false;
-    await dom.recordingPreviewLive.play().catch(() => {});
+    try {
+      await dom.recordingPreviewLive.play();
+    } catch {
+      // Ignore autoplay failures; the live preview can still render once the user interacts.
+    }
     dom.recordingStatus.textContent =
       'Camera and microphone are ready. Click Start Recording when you are ready.';
     dom.recordingTimer.hidden = true;
@@ -301,6 +305,7 @@ async function submitMedia(file, submissionSource) {
 }
 
 function uploadWithProgress(formData, onProgress) {
+  // XMLHttpRequest is still the simplest way to expose upload progress as an awaitable operation.
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
@@ -875,13 +880,17 @@ function updateActionAvailability() {
 }
 
 function initEventListeners() {
-  dom.loginForm.addEventListener('submit', (event) => {
+  dom.loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    login(dom.usernameInput.value.trim(), dom.passwordInput.value);
+    await login(dom.usernameInput.value.trim(), dom.passwordInput.value);
   });
 
-  dom.logoutBtn.addEventListener('click', logout);
-  dom.refreshHistoryBtn.addEventListener('click', loadSubmissionHistory);
+  dom.logoutBtn.addEventListener('click', async () => {
+    await logout();
+  });
+  dom.refreshHistoryBtn.addEventListener('click', async () => {
+    await loadSubmissionHistory();
+  });
 
   dom.dropZone.addEventListener('click', () => {
     if (!dom.fileInput.disabled) {
@@ -930,12 +939,20 @@ function initEventListeners() {
   });
 
   dom.clearBtn.addEventListener('click', clearFile);
-  dom.feedbackBtn.addEventListener('click', obtainFeedback);
-  dom.enableCameraBtn.addEventListener('click', enableCameraPreview);
-  dom.startRecordingBtn.addEventListener('click', startRecordingSession);
+  dom.feedbackBtn.addEventListener('click', async () => {
+    await obtainFeedback();
+  });
+  dom.enableCameraBtn.addEventListener('click', async () => {
+    await enableCameraPreview();
+  });
+  dom.startRecordingBtn.addEventListener('click', async () => {
+    await startRecordingSession();
+  });
   dom.stopRecordingBtn.addEventListener('click', () => stopRecordingSession(false));
   dom.discardRecordingBtn.addEventListener('click', discardRecording);
-  dom.uploadRecordingBtn.addEventListener('click', uploadRecordedMedia);
+  dom.uploadRecordingBtn.addEventListener('click', async () => {
+    await uploadRecordedMedia();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

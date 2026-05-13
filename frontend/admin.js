@@ -362,6 +362,7 @@ async function handleDeleteCohort(event) {
 }
 
 function showConfirmModal(title, body) {
+  // The modal is event-driven, so wrap it once and consume it with await at the call sites.
   return new Promise((resolve) => {
     dom.modalTitle.textContent = title;
     dom.modalBody.textContent = body;
@@ -489,12 +490,14 @@ function escapeHtml(str) {
 }
 
 function initEventListeners() {
-  dom.logoutBtn.addEventListener('click', logout);
+  dom.logoutBtn.addEventListener('click', async () => {
+    await logout();
+  });
   dom.addUserForm.addEventListener('submit', handleAddUser);
   dom.deleteCohortForm.addEventListener('submit', handleDeleteCohort);
-  dom.refreshSubmissionsBtn.addEventListener('click', () => {
+  dom.refreshSubmissionsBtn.addEventListener('click', async () => {
     if (state.selectedUserId) {
-      inspectUserSubmissions(state.selectedUserId, state.selectedUsername, true);
+      await inspectUserSubmissions(state.selectedUserId, state.selectedUsername, true);
     }
   });
 
