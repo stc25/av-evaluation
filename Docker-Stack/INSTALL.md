@@ -147,6 +147,22 @@ OLLAMA_MODEL=qwen2.5:latest
 
 Set `OLLAMA_URL` to the remote Ollama endpoint that this server can reach over the network. Do not rely on `host.docker.internal` in this production setup.
 
+### Remote transcription settings
+
+If you are offloading Whisper transcription to a separate HTTP bridge service, point the app at that endpoint:
+
+```text
+TRANSCRIPTION_URL=http://131.111.168.123:8001/transcribe
+```
+
+When `TRANSCRIPTION_URL` is set:
+
+- the app uploads media to that remote transcription service
+- the local `faster-whisper` runtime inside the app container is skipped
+- `WHISPER_MODEL_SIZE`, `WHISPER_DEVICE`, and `WHISPER_COMPUTE_TYPE` only matter as local fallback settings when `TRANSCRIPTION_URL` is blank
+
+If you are not using a remote transcription bridge, leave `TRANSCRIPTION_URL` empty and the worker will use local `faster-whisper`.
+
 ### Suggested worker/runtime settings
 
 ```text

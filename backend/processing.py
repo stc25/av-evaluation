@@ -17,7 +17,8 @@ MAX_DURATION_SECONDS = 15 * 60
 
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://131.111.168.123:11434/api/generate')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen2.5:latest')
-WHISPER_MODEL_SIZE = os.environ.get('WHISPER_MODEL_SIZE', 'small.en')
+TRANSCRIPTION_URL = os.environ.get('TRANSCRIPTION_URL', '').strip()
+WHISPER_MODEL_SIZE = os.environ.get('WHISPER_MODEL_SIZE', 'medium')
 WHISPER_DEVICE = os.environ.get('WHISPER_DEVICE', 'auto')
 WHISPER_COMPUTE_TYPE = os.environ.get('WHISPER_COMPUTE_TYPE', 'int8')
 UPLOADS_DIR = os.environ.get(
@@ -120,7 +121,58 @@ def get_whisper_model() -> WhisperModel:
     return _whisper_model
 
 
+def transcribe_remote(file_path: str) -> str:
+    file_name = os.path.basename(file_path)
+
+    try:
+        with open(file_path, 'rb') as handle:
+            resp = requests.post(
+                TRANSCRIPTION_URL,
+                files={'file': (file_name, handle)},
+                timeout=1800,
+            )
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise SubmissionProcessingError(
+            'Could not connect to the remote transcription service. Please try again later.'
+        ) from exc
+
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        raise SubmissionProcessingError(
+            'Remote transcription service returned an invalid response.'
+        ) from exc
+
+    transcript = (payload.get('transcript') or '').strip()
+    if not transcript:
+        raise SubmissionProcessingError(
+            'Remote transcription service returned no transcript.'
+        )
+
+    elapsed = payload.get('elapsed_seconds')
+    model = payload.get('model') or 'remote'
+    if elapsed is not None:
+        logger.info(
+            'Remote transcription completed file=%s model=%s elapsed_seconds=%s',
+            file_name,
+            model,
+            elapsed,
+        )
+    else:
+        logger.info(
+            'Remote transcription completed file=%s model=%s',
+            file_name,
+            model,
+        )
+
+    return transcript
+
+
 def transcribe(file_path: str) -> str:
+    if TRANSCRIPTION_URL:
+        return transcribe_remote(file_path)
+
     model = get_whisper_model()
     segments, _info = model.transcribe(
         file_path,
