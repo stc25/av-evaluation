@@ -1,11 +1,18 @@
 import logging
 import os
+import time
 from typing import Any
 
 import requests
 
 from database import get_db
-from processing import SubmissionProcessingError, UPLOADS_DIR, get_feedback, transcribe
+from processing import (
+    SubmissionProcessingError,
+    UPLOADS_DIR,
+    WHISPER_MODEL_SIZE,
+    get_feedback,
+    transcribe,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +61,28 @@ def process_submission_job(submission_id: str) -> None:
                 'The stored media file could not be found. Please upload the presentation again.'
             )
 
-        transcript = transcribe(file_path)
+        transcription_started_at = time.perf_counter()
+        try:
+            transcript = transcribe(file_path)
+        except Exception:
+            transcription_elapsed = time.perf_counter() - transcription_started_at
+            logger.exception(
+                'Whisper transcription failed submission_id=%s file=%s model=%s elapsed_seconds=%.2f',
+                submission_id,
+                stored_filename,
+                WHISPER_MODEL_SIZE,
+                transcription_elapsed,
+            )
+            raise
+
+        transcription_elapsed = time.perf_counter() - transcription_started_at
+        logger.info(
+            'Whisper transcription completed submission_id=%s file=%s model=%s elapsed_seconds=%.2f',
+            submission_id,
+            stored_filename,
+            WHISPER_MODEL_SIZE,
+            transcription_elapsed,
+        )
         if not transcript:
             raise SubmissionProcessingError(
                 'No speech was detected in the file. Please check your audio and try again.'
