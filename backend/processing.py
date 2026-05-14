@@ -17,7 +17,7 @@ MAX_DURATION_SECONDS = 15 * 60
 
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://131.111.168.123:11434/api/generate')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen2.5:latest')
-WHISPER_MODEL_SIZE = os.environ.get('WHISPER_MODEL_SIZE', 'medium')
+WHISPER_MODEL_SIZE = os.environ.get('WHISPER_MODEL_SIZE', 'small.en')
 WHISPER_DEVICE = os.environ.get('WHISPER_DEVICE', 'auto')
 WHISPER_COMPUTE_TYPE = os.environ.get('WHISPER_COMPUTE_TYPE', 'int8')
 UPLOADS_DIR = os.environ.get(
@@ -122,7 +122,12 @@ def get_whisper_model() -> WhisperModel:
 
 def transcribe(file_path: str) -> str:
     model = get_whisper_model()
-    segments, _info = model.transcribe(file_path)
+    segments, _info = model.transcribe(
+        file_path,
+        language='en',
+        beam_size=1,
+        vad_filter=True,
+    )
     return ' '.join(segment.text.strip() for segment in segments if segment.text).strip()
 
 
