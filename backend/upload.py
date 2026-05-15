@@ -5,6 +5,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 
+import requests
 from flask import Blueprint, jsonify, request, session
 
 from auth import login_required
@@ -14,6 +15,7 @@ from processing import (
     MAX_DURATION_SECONDS,
     UPLOADS_DIR,
     build_stored_filename,
+    compare_transcripts,
     ensure_uploads_dir,
     get_max_bytes_for_extension,
     get_media_duration_seconds,
@@ -134,6 +136,58 @@ def get_submission(submission_id):
     if not row:
         return jsonify({'error': 'Submission not found'}), 404
     return jsonify(_submission_response(row))
+
+
+@upload_bp.route('/submissions/compare', methods=['POST'])
+@login_required
+def compare_submissions():
+    data = request.get_json(silent=True) or {}
+    submission_ids = data.get('submission_ids')
+
+    if not isinstance(submission_ids, list) or len(submission_ids) != 2:
+        return jsonify({'error': 'Exactly two submission IDs are required.'}), 400
+
+    submission_ids = [str(item).strip() for item in submission_ids]
+    if not submission_ids[0] or not submission_ids[1] or submission_ids[0] == submission_ids[1]:
+        return jsonify({'error': 'Select two different submissions to compare.'}), 400
+
+    rows = []
+    for submission_id in submission_ids:
+        row = _fetch_submission_for_user(submission_id, session['user_id'])
+        if not row:
+            return jsonify({'error': 'One or more submissions could not be found.'}), 404
+        rows.append(row)
+
+    missing_transcript = next((row for row in rows if not (row['transcript'] or '').strip()), None)
+    if missing_transcript:
+        return jsonify({
+            'error': 'Both submissions must have completed transcripts before they can be compared.'
+        }), 422
+
+    try:
+        comparison = compare_transcripts(rows[0]['transcript'], rows[1]['transcript'])
+    except requests.exceptions.ConnectionError:
+        return jsonify({'error': 'Could not connect to the AI model. Please try again later.'}), 503
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'The AI model took too long to respond. Please try again later.'}), 504
+    except requests.exceptions.RequestException:
+        logger.exception('Failed to compare submissions %s and %s', submission_ids[0], submission_ids[1])
+        return jsonify({'error': 'Could not compare the selected submissions. Please try again later.'}), 502
+
+    return jsonify({
+        'comparison': comparison,
+        'submissions': [
+            {
+                'submission_id': row['submission_id'],
+                'original_filename': row['original_filename'],
+                'duration_seconds': row['duration_seconds'],
+                'submission_source': row['submission_source'],
+                'status': row['status'],
+                'submitted_at': row['submitted_at'],
+            }
+            for row in rows
+        ],
+    })
 
 
 @upload_bp.route('/upload', methods=['POST'])

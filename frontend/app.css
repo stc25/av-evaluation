@@ -658,6 +658,43 @@ footer {
   margin-bottom: 0.25rem;
 }
 
+.compare-help {
+  color: var(--cambridge-blue);
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin-top: 0.45rem;
+}
+
+.comparison-history-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.comparison-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 7rem;
+  color: var(--cambridge-blue);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.comparison-checkbox-label input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.history-item-button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 /* ── Responsive — breakpoint at 760 px ──────────────────────────────────── */
 @media (max-width: 760px) {
   .card {

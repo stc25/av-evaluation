@@ -20,6 +20,7 @@ The app is built as a single Flask service that:
 - In-browser webcam recording with a `15` minute limit and `1` minute warning
 - Inline playback before submission
 - Transcript and feedback persistence with submission history
+- Transcript-based comparison of two previous submissions using the LLM
 - Admin page for:
   - creating users
   - listing users
@@ -64,6 +65,7 @@ The current application code lives in `backend/` and `frontend/`. Production dep
 6. The generated markdown feedback is returned to the frontend.
 7. The transcript and feedback are stored in SQLite.
 8. The submission metadata, transcript, feedback, and stored media path are saved for later review.
+9. A user can select two completed submissions and request an LLM comparison based on the stored transcripts.
 
 ## Prerequisites
 
@@ -333,6 +335,8 @@ Authenticated admins can:
 - delete a user and their submissions
 - delete all users in a cohort except the currently signed-in admin
 
+Users can also compare two completed submissions from their history. The comparison is based only on the stored transcript text, not on vocal delivery, slides, pronunciation, or visual presentation.
+
 ## API Summary
 
 | Route | Method | Purpose |
@@ -341,6 +345,7 @@ Authenticated admins can:
 | `/api/auth/logout` | `POST` | Sign out |
 | `/api/auth/me` | `GET` | Return the current session user |
 | `/api/upload` | `POST` | Upload a presentation and get feedback |
+| `/api/submissions/compare` | `POST` | Compare two stored transcripts and return LLM-generated comparison feedback |
 | `/api/admin/users` | `GET` | List users |
 | `/api/admin/users` | `POST` | Create a user |
 | `/api/admin/users/<user_id>` | `DELETE` | Delete one user |
@@ -350,6 +355,7 @@ Authenticated admins can:
 
 - The frontend is served by Flask from the same origin as the API.
 - The frontend expects markdown feedback and sanitizes it before rendering.
+- Submission comparison uses saved transcripts only; it does not retranscribe the original media.
 - Large uploads can take time because upload, transcription, and Ollama generation all happen in one request.
 - The first transcription request may be slower while the Whisper model is downloaded or loaded.
 

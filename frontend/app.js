@@ -12,6 +12,8 @@ const state = {
   selectedFileSubmitted: false,
   selectedFileUrl: null,
   submissions: [],
+  selectedComparisonIds: [],
+  comparisonInFlight: false,
   uploadInFlight: false,
   recordingSupported: false,
   recordingState: 'idle',
@@ -103,6 +105,8 @@ function showLoginView() {
   clearHistoryMessages();
   dom.historyList.innerHTML = '';
   dom.historyEmpty.hidden = true;
+  state.selectedComparisonIds = [];
+  updateComparisonControls();
 }
 
 function showAppView(user) {
@@ -115,6 +119,8 @@ function showAppView(user) {
   resetRecordingUi();
   hideFeedback();
   checkRecordingSupport();
+  state.selectedComparisonIds = [];
+  updateComparisonControls();
   loadSubmissionHistory();
 }
 
@@ -399,7 +405,9 @@ async function loadSubmissionHistory() {
     }
 
     state.submissions = Array.isArray(data) ? data : [];
+    syncSelectedComparisonIds();
     renderSubmissionHistory();
+    updateComparisonControls();
     ensureSubmissionPolling();
     await syncActiveSubmissionDetail();
   } catch {
@@ -418,16 +426,110 @@ function renderSubmissionHistory() {
   dom.historyEmpty.hidden = true;
 
   state.submissions.forEach((submission) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'history-item admin-history-item';
-    button.innerHTML = `
-      <span class="history-item-title">${escapeHtml(submission.original_filename || 'Previous submission')}</span>
-      <span class="history-item-date">${escapeHtml(buildSubmissionMeta(submission))}</span>
+    const wrapper = document.createElement('div');
+    wrapper.className = 'history-item admin-history-item comparison-history-item';
+
+    const checked = state.selectedComparisonIds.includes(submission.submission_id);
+    const comparisonUnavailable = submission.status !== 'completed';
+    const disableCheckbox = comparisonUnavailable || (!checked && state.selectedComparisonIds.length >= 2);
+
+    wrapper.innerHTML = `
+      <label class="comparison-checkbox-label">
+        <input
+          type="checkbox"
+          class="comparison-checkbox"
+          data-submission-id="${escapeHtml(submission.submission_id)}"
+          ${checked ? 'checked' : ''}
+          ${disableCheckbox ? 'disabled' : ''}
+        >
+        <span>${comparisonUnavailable ? 'Unavailable' : 'Compare'}</span>
+      </label>
+      <button type="button" class="history-item-button" data-submission-id="${escapeHtml(submission.submission_id)}">
+        <span class="history-item-title">${escapeHtml(submission.original_filename || 'Previous submission')}</span>
+        <span class="history-item-date">${escapeHtml(buildSubmissionMeta(submission))}</span>
+      </button>
     `;
-    button.addEventListener('click', () => openSubmissionFeedback(submission.submission_id));
-    dom.historyList.appendChild(button);
+
+    wrapper.querySelector('.history-item-button').addEventListener('click', () => {
+      openSubmissionFeedback(submission.submission_id);
+    });
+    wrapper.querySelector('.comparison-checkbox').addEventListener('change', (event) => {
+      handleComparisonSelection(submission.submission_id, event.target.checked);
+    });
+
+    dom.historyList.appendChild(wrapper);
   });
+}
+
+function syncSelectedComparisonIds() {
+  const availableIds = new Set(state.submissions.map((submission) => submission.submission_id));
+  state.selectedComparisonIds = state.selectedComparisonIds.filter((submissionId) => availableIds.has(submissionId));
+}
+
+function handleComparisonSelection(submissionId, isSelected) {
+  if (isSelected) {
+    if (!state.selectedComparisonIds.includes(submissionId) && state.selectedComparisonIds.length < 2) {
+      state.selectedComparisonIds = [...state.selectedComparisonIds, submissionId];
+    }
+  } else {
+    state.selectedComparisonIds = state.selectedComparisonIds.filter((id) => id !== submissionId);
+  }
+
+  renderSubmissionHistory();
+  updateComparisonControls();
+}
+
+function updateComparisonControls() {
+  if (!dom.compareSubmissionsBtn) {
+    return;
+  }
+
+  const exactlyTwoSelected = state.selectedComparisonIds.length === 2;
+  dom.compareSubmissionsBtn.disabled = !exactlyTwoSelected || state.comparisonInFlight || state.historyPollInFlight;
+  dom.compareSubmissionsBtn.textContent = state.comparisonInFlight
+    ? 'Comparing...'
+    : 'Compare Presentations';
+}
+
+async function compareSelectedSubmissions() {
+  if (state.selectedComparisonIds.length !== 2 || state.comparisonInFlight) {
+    return;
+  }
+
+  clearHistoryMessages();
+  state.comparisonInFlight = true;
+  updateComparisonControls();
+
+  try {
+    const resp = await apiFetch('/api/submissions/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submission_ids: state.selectedComparisonIds }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showHistoryError(data.error || 'Could not compare the selected presentations.');
+      return;
+    }
+
+    const comparedSubmissions = Array.isArray(data.submissions) ? data.submissions : [];
+    const title = comparedSubmissions.length === 2
+      ? `Comparison: ${comparedSubmissions[0].original_filename || 'Transcript 1'} vs ${comparedSubmissions[1].original_filename || 'Transcript 2'}`
+      : 'Presentation Comparison';
+    const meta = comparedSubmissions.map((submission, index) => {
+      const label = `Transcript ${index + 1}`;
+      const details = buildSubmissionMeta(submission);
+      return `${label}: ${submission.original_filename || 'Submission'}${details ? ` (${details})` : ''}`;
+    }).join(' | ');
+
+    showFeedback(data.comparison, { title, meta });
+  } catch {
+    showHistoryError('Could not compare the selected presentations.');
+  } finally {
+    state.comparisonInFlight = false;
+    updateComparisonControls();
+  }
 }
 
 async function openSubmissionFeedback(submissionId) {
@@ -1041,6 +1143,7 @@ function updateActionAvailability() {
   } else {
     dom.dropZone.removeAttribute('aria-disabled');
   }
+  updateComparisonControls();
 }
 
 function initEventListeners() {
@@ -1054,6 +1157,9 @@ function initEventListeners() {
   });
   dom.refreshHistoryBtn.addEventListener('click', async () => {
     await loadSubmissionHistory();
+  });
+  dom.compareSubmissionsBtn.addEventListener('click', async () => {
+    await compareSelectedSubmissions();
   });
 
   dom.dropZone.addEventListener('click', () => {
@@ -1134,6 +1240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   dom.adminLink = document.getElementById('admin-link');
   dom.logoutBtn = document.getElementById('logout-btn');
   dom.refreshHistoryBtn = document.getElementById('refresh-history-btn');
+  dom.compareSubmissionsBtn = document.getElementById('compare-submissions-btn');
   dom.historyError = document.getElementById('history-error');
   dom.historyEmpty = document.getElementById('history-empty');
   dom.historyList = document.getElementById('history-list');

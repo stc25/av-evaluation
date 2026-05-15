@@ -45,6 +45,47 @@ FEEDBACK_PROMPT = (
     '{transcript}'
 )
 
+COMPARISON_PROMPT = (
+    'You are an experienced presentation coach comparing two postgraduate research '
+    'presentation transcripts. The speakers are non-native English speakers (IELTS 8-9 level) '
+    'presenting their intended research to fellow postgraduate students across different disciplines.\n\n'
+    'Assess only the transcript text. Do not evaluate vocal delivery, pronunciation, slides, body language, '
+    'timing, or audience interaction.\n\n'
+    'Your task is to:\n'
+    '1. Evaluate Transcript 1 and Transcript 2 individually using the criteria below.\n'
+    '2. Compare the two evaluations and determine which transcript is stronger overall.\n'
+    '3. State clearly whether Transcript 2 shows improvement over Transcript 1, if that is supported by the text.\n'
+    '4. Provide a concise comparative evaluation.\n\n'
+    'Assess both transcripts using these criteria:\n'
+    '- **Structure:** overall organization and flow\n'
+    '- **Tone & Style:** appropriateness for an interdisciplinary postgraduate audience\n'
+    '- **Clarity:** how clearly ideas and research intentions are communicated\n'
+    '- **Cohesion:** logical connections between sections and ideas\n'
+    '- **Language:** grammar, vocabulary, and academic style accuracy\n\n'
+    'Output requirements:\n'
+    '- Maximum 500 words\n'
+    '- Use markdown with clear headings\n'
+    '- Do not include any preamble or concluding remarks\n'
+    '- Begin directly with the evaluation of Transcript 1\n'
+    '- Use these headings:\n'
+    '  - `Transcript 1 Evaluation`\n'
+    '  - `Transcript 2 Evaluation`\n'
+    '  - `Comparative Evaluation`\n'
+    '  - `Suggestions for Improvement`\n\n'
+    'In the `Comparative Evaluation` section:\n'
+    '- state clearly which transcript is better overall\n'
+    '- explain the main reasons for that judgment\n'
+    '- note whether Transcript 2 improves on Transcript 1\n\n'
+    'In the `Suggestions for Improvement` section:\n'
+    '- provide 2-3 specific, actionable suggestions\n'
+    '- focus primarily on the weaker transcript\n'
+    '- if both are of very similar quality, give suggestions that would strengthen both\n\n'
+    'Transcript 1:\n'
+    '{transcript1}\n\n'
+    'Transcript 2:\n'
+    '{transcript2}'
+)
+
 _whisper_model = None
 
 
@@ -185,6 +226,18 @@ def transcribe(file_path: str) -> str:
 
 def get_feedback(transcript: str) -> str:
     prompt = FEEDBACK_PROMPT.format(transcript=transcript)
+    return _generate_with_ollama(prompt)
+
+
+def compare_transcripts(transcript1: str, transcript2: str) -> str:
+    prompt = COMPARISON_PROMPT.format(
+        transcript1=transcript1,
+        transcript2=transcript2,
+    )
+    return _generate_with_ollama(prompt)
+
+
+def _generate_with_ollama(prompt: str) -> str:
     resp = requests.post(
         OLLAMA_URL,
         json={'model': OLLAMA_MODEL, 'prompt': prompt, 'stream': False},
