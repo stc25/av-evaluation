@@ -392,8 +392,6 @@ function uploadWithProgress(formData, onProgress) {
 
 async function loadSubmissionHistory() {
   clearHistoryMessages();
-  dom.historyList.innerHTML = '';
-  dom.historyEmpty.hidden = true;
 
   try {
     const resp = await apiFetch('/api/submissions');
@@ -515,10 +513,10 @@ async function compareSelectedSubmissions() {
 
     const comparedSubmissions = Array.isArray(data.submissions) ? data.submissions : [];
     const title = comparedSubmissions.length === 2
-      ? `Comparison: ${comparedSubmissions[0].original_filename || 'Transcript 1'} vs ${comparedSubmissions[1].original_filename || 'Transcript 2'}`
+      ? 'Progress Comparison'
       : 'Presentation Comparison';
     const meta = comparedSubmissions.map((submission, index) => {
-      const label = `Transcript ${index + 1}`;
+      const label = index === 0 ? 'Earlier' : 'Later';
       const details = buildSubmissionMeta(submission);
       return `${label}: ${submission.original_filename || 'Submission'}${details ? ` (${details})` : ''}`;
     }).join(' | ');
@@ -590,10 +588,12 @@ async function pollIncompleteSubmissions() {
   }
 
   state.historyPollInFlight = true;
+  updateComparisonControls();
   try {
     await loadSubmissionHistory();
   } finally {
     state.historyPollInFlight = false;
+    updateComparisonControls();
   }
 }
 

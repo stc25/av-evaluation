@@ -335,7 +335,7 @@ Authenticated admins can:
 - delete a user and their submissions
 - delete all users in a cohort except the currently signed-in admin
 
-Users can also compare two completed submissions from their history. The comparison is based only on the stored transcript text, not on vocal delivery, slides, pronunciation, or visual presentation.
+Users can also compare two completed submissions from their history. The comparison is based only on the stored transcript text, not on vocal delivery, slides, pronunciation, or visual presentation. When two submissions are selected, the backend always sorts them by `submitted_at` and treats the oldest submission as the baseline. The LLM output is framed as progress from `the older presentation` to `the latest presentation`, and it does not use any part of the submission filenames in the comparison text.
 
 ## API Summary
 

@@ -51,39 +51,42 @@ COMPARISON_PROMPT = (
     'presenting their intended research to fellow postgraduate students across different disciplines.\n\n'
     'Assess only the transcript text. Do not evaluate vocal delivery, pronunciation, slides, body language, '
     'timing, or audience interaction.\n\n'
+    'Treat the first transcript as the older presentation and the second transcript as the latest presentation.\n'
+    'Do not use any part of the filenames in the response. Refer to them only as "the older presentation" '
+    'and "the latest presentation".\n\n'
     'Your task is to:\n'
-    '1. Evaluate Transcript 1 and Transcript 2 individually using the criteria below.\n'
-    '2. Compare the two evaluations and determine which transcript is stronger overall.\n'
-    '3. State clearly whether Transcript 2 shows improvement over Transcript 1, if that is supported by the text.\n'
-    '4. Provide a concise comparative evaluation.\n\n'
-    'Assess both transcripts using these criteria:\n'
+    '1. Compare the latest presentation against the older presentation baseline.\n'
+    '2. Judge whether the latest presentation is stronger overall.\n'
+    '3. Identify the main areas of improvement, if any.\n'
+    '4. Identify any regressions where the latest presentation is weaker.\n'
+    '5. Provide concise, actionable advice focused primarily on the weaker submission.\n\n'
+    'Assess the submissions using these criteria:\n'
     '- **Structure:** overall organization and flow\n'
     '- **Tone & Style:** appropriateness for an interdisciplinary postgraduate audience\n'
     '- **Clarity:** how clearly ideas and research intentions are communicated\n'
     '- **Cohesion:** logical connections between sections and ideas\n'
     '- **Language:** grammar, vocabulary, and academic style accuracy\n\n'
     'Output requirements:\n'
-    '- Maximum 500 words\n'
+    '- Maximum 400 words\n'
     '- Use markdown with clear headings\n'
     '- Do not include any preamble or concluding remarks\n'
-    '- Begin directly with the evaluation of Transcript 1\n'
-    '- Use these headings:\n'
-    '  - `Transcript 1 Evaluation`\n'
-    '  - `Transcript 2 Evaluation`\n'
-    '  - `Comparative Evaluation`\n'
+    '- Begin directly with the progress comparison\n'
+    '- Use only these headings:\n'
+    '  - `Progress Comparison`\n'
     '  - `Suggestions for Improvement`\n\n'
-    'In the `Comparative Evaluation` section:\n'
-    '- state clearly which transcript is better overall\n'
+    'In the `Progress Comparison` section:\n'
+    '- state clearly whether the latest presentation is stronger overall\n'
     '- explain the main reasons for that judgment\n'
-    '- note whether Transcript 2 improves on Transcript 1\n\n'
+    '- note whether the latest presentation improves on the older presentation\n'
+    '- mention any clear regressions in the latest presentation\n\n'
     'In the `Suggestions for Improvement` section:\n'
     '- provide 2-3 specific, actionable suggestions\n'
     '- focus primarily on the weaker transcript\n'
     '- if both are of very similar quality, give suggestions that would strengthen both\n\n'
-    'Transcript 1:\n'
-    '{transcript1}\n\n'
-    'Transcript 2:\n'
-    '{transcript2}'
+    'Older Presentation ({earlier_label}):\n'
+    '{earlier_transcript}\n\n'
+    'Latest Presentation ({later_label}):\n'
+    '{later_transcript}'
 )
 
 _whisper_model = None
@@ -229,10 +232,22 @@ def get_feedback(transcript: str) -> str:
     return _generate_with_ollama(prompt)
 
 
-def compare_transcripts(transcript1: str, transcript2: str) -> str:
+def _clean_comparison_label(label: str) -> str:
+    cleaned = re.sub(r'\s+', ' ', label).strip()
+    return cleaned or 'Submission'
+
+
+def compare_transcripts(
+    earlier_transcript: str,
+    later_transcript: str,
+    earlier_label: str,
+    later_label: str,
+) -> str:
     prompt = COMPARISON_PROMPT.format(
-        transcript1=transcript1,
-        transcript2=transcript2,
+        earlier_label=_clean_comparison_label(earlier_label),
+        later_label=_clean_comparison_label(later_label),
+        earlier_transcript=earlier_transcript,
+        later_transcript=later_transcript,
     )
     return _generate_with_ollama(prompt)
 

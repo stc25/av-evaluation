@@ -158,6 +158,8 @@ def compare_submissions():
             return jsonify({'error': 'One or more submissions could not be found.'}), 404
         rows.append(row)
 
+    rows.sort(key=lambda row: row['submitted_at'] or '')
+
     missing_transcript = next((row for row in rows if not (row['transcript'] or '').strip()), None)
     if missing_transcript:
         return jsonify({
@@ -165,7 +167,12 @@ def compare_submissions():
         }), 422
 
     try:
-        comparison = compare_transcripts(rows[0]['transcript'], rows[1]['transcript'])
+        comparison = compare_transcripts(
+            rows[0]['transcript'],
+            rows[1]['transcript'],
+            rows[0]['original_filename'] or 'Earlier submission',
+            rows[1]['original_filename'] or 'Later submission',
+        )
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Could not connect to the AI model. Please try again later.'}), 503
     except requests.exceptions.Timeout:
