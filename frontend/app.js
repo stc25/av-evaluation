@@ -1,7 +1,7 @@
 'use strict';
 
 const API_BASE = '';
-const MAX_MP3_BYTES = 30 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 const MAX_RECORDING_MS = 15 * 60 * 1000;
 const WARNING_THRESHOLD_MS = 14 * 60 * 1000;
@@ -120,11 +120,11 @@ function showAppView(user) {
 
 function validateFile(file) {
   const ext = getFileExtension(file.name);
-  if (!['mp3', 'mp4', 'webm'].includes(ext)) {
-    return 'Only MP3 (audio), MP4 (video), and WebM (video) files are accepted.';
+  if (!['mp3', 'm4a', 'mp4', 'webm'].includes(ext)) {
+    return 'Only MP3 or M4A (audio), MP4 (video), and WebM (video) files are accepted.';
   }
 
-  const maxBytes = ext === 'mp3' ? MAX_MP3_BYTES : MAX_VIDEO_BYTES;
+  const maxBytes = ext === 'mp3' || ext === 'm4a' ? MAX_AUDIO_BYTES : MAX_VIDEO_BYTES;
   const maxMb = maxBytes / (1024 * 1024);
 
   if (file.size > maxBytes) {

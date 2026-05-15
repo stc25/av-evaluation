@@ -148,7 +148,7 @@ def upload():
 
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext not in ALLOWED_EXTENSIONS:
-        return jsonify({'error': 'Only MP3, MP4, and WebM files are accepted'}), 415
+        return jsonify({'error': 'Only MP3, M4A, MP4, and WebM files are accepted'}), 415
 
     max_bytes = get_max_bytes_for_extension(ext)
     max_mb = max_bytes // (1024 * 1024)
@@ -180,7 +180,7 @@ def upload():
         except ValueError as exc:
             logger.warning('Media duration validation failed: %s', exc)
             return jsonify({
-                'error': 'Could not determine media duration. Please upload a standard MP3, MP4, or WebM file.'
+                'error': 'Could not determine media duration. Please upload a standard MP3, M4A, MP4, or WebM file.'
             }), 422
 
         if duration_seconds > MAX_DURATION_SECONDS:

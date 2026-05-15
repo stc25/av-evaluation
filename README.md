@@ -13,9 +13,9 @@ The app is built as a single Flask service that:
 ## Features
 
 - Username/password sign-in with session cookies
-- Upload support for `MP3`, `MP4`, and recorded `WebM`
+- Upload support for `MP3`, `M4A`, `MP4`, and recorded `WebM`
 - File size validation:
-  - `MP3`: up to `30 MB`
+  - `MP3` / `M4A`: up to `50 MB`
   - `MP4`: up to `300 MB`
 - In-browser webcam recording with a `15` minute limit and `1` minute warning
 - Inline playback before submission
@@ -57,7 +57,7 @@ The current application code lives in `backend/` and `frontend/`. Production dep
 ## How It Works
 
 1. A user signs in through the frontend.
-2. The browser uploads an `MP3`, `MP4`, or recorded `WebM` file to `POST /api/upload`.
+2. The browser uploads an `MP3`, `M4A`, `MP4`, or recorded `WebM` file to `POST /api/upload`.
 3. The backend writes the upload to a temporary file.
 4. `faster-whisper` transcribes the file locally, or the backend sends it to a remote HTTP transcription bridge when `TRANSCRIPTION_URL` is configured.
 5. The transcript is sent to Ollama using the configured local model.
@@ -180,6 +180,13 @@ WHISPER_MODEL_SIZE=small \
 WHISPER_COMPUTE_TYPE=int8 \
 ./.venv-wsl/bin/python run_dev.py
 ```
+
+Upload support and limits:
+
+- `MP3`: up to `50 MB`
+- `M4A`: up to `50 MB`
+- `MP4`: up to `300 MB`
+- recorded `WebM`: up to `300 MB`
 
 Use a remote transcription bridge instead of local Whisper:
 

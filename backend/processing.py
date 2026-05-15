@@ -10,8 +10,8 @@ from faster_whisper import WhisperModel
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {'mp3', 'mp4', 'webm'}
-MAX_MP3_BYTES = 30 * 1024 * 1024
+ALLOWED_EXTENSIONS = {'mp3', 'mp4', 'webm', 'm4a'}
+MAX_AUDIO_BYTES = 50 * 1024 * 1024
 MAX_MP4_BYTES = 300 * 1024 * 1024
 MAX_DURATION_SECONDS = 15 * 60
 
@@ -53,7 +53,7 @@ class SubmissionProcessingError(Exception):
 
 
 def get_max_bytes_for_extension(ext: str) -> int:
-    return MAX_MP3_BYTES if ext == 'mp3' else MAX_MP4_BYTES
+    return MAX_AUDIO_BYTES if ext in {'mp3', 'm4a'} else MAX_MP4_BYTES
 
 
 def ensure_uploads_dir() -> None:
