@@ -43,6 +43,18 @@ def _submission_response(row):
     }
 
 
+def _comparison_response(row):
+    return {
+        'comparison_id': row['comparison_id'],
+        'older_submission_id': row['older_submission_id'],
+        'latest_submission_id': row['latest_submission_id'],
+        'older_filename': row['older_filename'],
+        'latest_filename': row['latest_filename'],
+        'comparison_feedback': row['comparison_feedback'],
+        'created_at': row['created_at'],
+    }
+
+
 def _fetch_submission_for_user(submission_id: str, user_id: str):
     with get_db() as conn:
         row = conn.execute(
@@ -52,6 +64,21 @@ def _fetch_submission_for_user(submission_id: str, user_id: str):
                FROM submissions
                WHERE submission_id = ?''',
             (submission_id,),
+        ).fetchone()
+
+    if not row or row['user_id'] != user_id:
+        return None
+    return row
+
+
+def _fetch_comparison_for_user(comparison_id: str, user_id: str):
+    with get_db() as conn:
+        row = conn.execute(
+            '''SELECT comparison_id, user_id, older_submission_id, latest_submission_id,
+                      older_filename, latest_filename, comparison_feedback, created_at
+               FROM comparisons
+               WHERE comparison_id = ?''',
+            (comparison_id,),
         ).fetchone()
 
     if not row or row['user_id'] != user_id:
@@ -86,6 +113,34 @@ def _insert_submission(
                 None,
                 None,
                 submitted_at,
+            ),
+        )
+
+
+def _insert_comparison(
+    comparison_id: str,
+    older_submission_id: str,
+    latest_submission_id: str,
+    older_filename: str,
+    latest_filename: str,
+    comparison_feedback: str,
+    created_at: str,
+) -> None:
+    with get_db() as conn:
+        conn.execute(
+            '''INSERT INTO comparisons
+               (comparison_id, user_id, older_submission_id, latest_submission_id,
+                older_filename, latest_filename, comparison_feedback, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            (
+                comparison_id,
+                session['user_id'],
+                older_submission_id,
+                latest_submission_id,
+                older_filename,
+                latest_filename,
+                comparison_feedback,
+                created_at,
             ),
         )
 
@@ -138,6 +193,41 @@ def get_submission(submission_id):
     return jsonify(_submission_response(row))
 
 
+@upload_bp.route('/comparisons', methods=['GET'])
+@login_required
+def list_comparisons():
+    with get_db() as conn:
+        rows = conn.execute(
+            '''SELECT comparison_id, older_submission_id, latest_submission_id,
+                      older_filename, latest_filename, created_at
+               FROM comparisons
+               WHERE user_id = ?
+               ORDER BY created_at DESC''',
+            (session['user_id'],)
+        ).fetchall()
+
+    return jsonify([
+        {
+            'comparison_id': row['comparison_id'],
+            'older_submission_id': row['older_submission_id'],
+            'latest_submission_id': row['latest_submission_id'],
+            'older_filename': row['older_filename'],
+            'latest_filename': row['latest_filename'],
+            'created_at': row['created_at'],
+        }
+        for row in rows
+    ])
+
+
+@upload_bp.route('/comparisons/<comparison_id>', methods=['GET'])
+@login_required
+def get_comparison(comparison_id):
+    row = _fetch_comparison_for_user(comparison_id, session['user_id'])
+    if not row:
+        return jsonify({'error': 'Comparison not found'}), 404
+    return jsonify(_comparison_response(row))
+
+
 @upload_bp.route('/submissions/compare', methods=['POST'])
 @login_required
 def compare_submissions():
@@ -181,8 +271,28 @@ def compare_submissions():
         logger.exception('Failed to compare submissions %s and %s', submission_ids[0], submission_ids[1])
         return jsonify({'error': 'Could not compare the selected submissions. Please try again later.'}), 502
 
+    comparison_id = str(uuid.uuid4())
+    created_at = datetime.now(timezone.utc).isoformat()
+    _insert_comparison(
+        comparison_id,
+        rows[0]['submission_id'],
+        rows[1]['submission_id'],
+        rows[0]['original_filename'] or 'Older submission',
+        rows[1]['original_filename'] or 'Latest submission',
+        comparison,
+        created_at,
+    )
+
     return jsonify({
         'comparison': comparison,
+        'comparison_record': {
+            'comparison_id': comparison_id,
+            'older_submission_id': rows[0]['submission_id'],
+            'latest_submission_id': rows[1]['submission_id'],
+            'older_filename': rows[0]['original_filename'] or 'Older submission',
+            'latest_filename': rows[1]['original_filename'] or 'Latest submission',
+            'created_at': created_at,
+        },
         'submissions': [
             {
                 'submission_id': row['submission_id'],

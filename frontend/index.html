@@ -106,6 +106,31 @@
         <div id="history-list" class="history-list" aria-live="polite"></div>
       </div>
 
+      <!-- Saved progress comparisons -->
+      <div class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Previous Progress Comparisons</h2>
+            <p class="intro-text">
+              Reopen saved comparison feedback between your older and latest presentations.
+            </p>
+          </div>
+        </div>
+
+        <p id="comparison-history-error" class="error-msg" role="alert" hidden></p>
+        <div id="comparison-history-empty" class="history-empty" hidden>
+          You have not saved any progress comparisons yet.
+        </div>
+        <div id="comparison-history-list" class="history-list" aria-live="polite"></div>
+      </div>
+
+      <!-- Comparison feedback card -->
+      <div id="comparison-feedback-container" class="card" hidden aria-live="polite">
+        <h2 id="comparison-feedback-title">Progress Comparison</h2>
+        <p id="comparison-feedback-meta" class="feedback-meta" hidden></p>
+        <div id="comparison-feedback-content" class="feedback-body"></div>
+      </div>
+
       <!-- Webcam recording card -->
       <div class="card">
         <div class="section-heading">

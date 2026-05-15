@@ -128,6 +128,21 @@ def _init_sqlite():
                 FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             )'''
         )
+        conn.execute(
+            '''CREATE TABLE IF NOT EXISTS comparisons (
+                comparison_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                older_submission_id TEXT NOT NULL,
+                latest_submission_id TEXT NOT NULL,
+                older_filename TEXT NOT NULL DEFAULT '',
+                latest_filename TEXT NOT NULL DEFAULT '',
+                comparison_feedback TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                FOREIGN KEY (older_submission_id) REFERENCES submissions(submission_id) ON DELETE CASCADE,
+                FOREIGN KEY (latest_submission_id) REFERENCES submissions(submission_id) ON DELETE CASCADE
+            )'''
+        )
         _ensure_submission_columns_sqlite(conn)
 
 
@@ -158,6 +173,24 @@ def _init_mariadb():
                 submitted_at VARCHAR(64) NOT NULL,
                 CONSTRAINT fk_submissions_user
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'''
+        )
+        conn.execute(
+            '''CREATE TABLE IF NOT EXISTS comparisons (
+                comparison_id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                older_submission_id VARCHAR(36) NOT NULL,
+                latest_submission_id VARCHAR(36) NOT NULL,
+                older_filename VARCHAR(255) NOT NULL DEFAULT '',
+                latest_filename VARCHAR(255) NOT NULL DEFAULT '',
+                comparison_feedback LONGTEXT NOT NULL,
+                created_at VARCHAR(64) NOT NULL,
+                CONSTRAINT fk_comparisons_user
+                    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+                CONSTRAINT fk_comparisons_older_submission
+                    FOREIGN KEY (older_submission_id) REFERENCES submissions(submission_id) ON DELETE CASCADE,
+                CONSTRAINT fk_comparisons_latest_submission
+                    FOREIGN KEY (latest_submission_id) REFERENCES submissions(submission_id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'''
         )
         _ensure_submission_columns_mariadb(conn)

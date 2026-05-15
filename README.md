@@ -335,7 +335,7 @@ Authenticated admins can:
 - delete a user and their submissions
 - delete all users in a cohort except the currently signed-in admin
 
-Users can also compare two completed submissions from their history. The comparison is based only on the stored transcript text, not on vocal delivery, slides, pronunciation, or visual presentation. When two submissions are selected, the backend always sorts them by `submitted_at` and treats the oldest submission as the baseline. The LLM output is framed as progress from `the older presentation` to `the latest presentation`, and it does not use any part of the submission filenames in the comparison text.
+Users can also compare two completed submissions from their history. The comparison is based only on the stored transcript text, not on vocal delivery, slides, pronunciation, or visual presentation. When two submissions are selected, the backend always sorts them by `submitted_at` and treats the oldest submission as the baseline. The LLM output is framed as progress from `the older presentation` to `the latest presentation`, and it does not use any part of the submission filenames in the comparison text. Each generated comparison is saved, and users can reopen it later from the `Previous Progress Comparisons` section.
 
 ## API Summary
 
@@ -345,7 +345,9 @@ Users can also compare two completed submissions from their history. The compari
 | `/api/auth/logout` | `POST` | Sign out |
 | `/api/auth/me` | `GET` | Return the current session user |
 | `/api/upload` | `POST` | Upload a presentation and get feedback |
-| `/api/submissions/compare` | `POST` | Compare two stored transcripts and return LLM-generated comparison feedback |
+| `/api/submissions/compare` | `POST` | Compare two stored transcripts, save the result, and return LLM-generated comparison feedback |
+| `/api/comparisons` | `GET` | List saved progress comparisons for the signed-in user |
+| `/api/comparisons/<comparison_id>` | `GET` | Fetch one saved progress comparison |
 | `/api/admin/users` | `GET` | List users |
 | `/api/admin/users` | `POST` | Create a user |
 | `/api/admin/users/<user_id>` | `DELETE` | Delete one user |

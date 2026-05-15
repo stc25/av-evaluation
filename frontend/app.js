@@ -12,6 +12,7 @@ const state = {
   selectedFileSubmitted: false,
   selectedFileUrl: null,
   submissions: [],
+  savedComparisons: [],
   selectedComparisonIds: [],
   comparisonInFlight: false,
   uploadInFlight: false,
@@ -105,8 +106,12 @@ function showLoginView() {
   clearHistoryMessages();
   dom.historyList.innerHTML = '';
   dom.historyEmpty.hidden = true;
+  clearComparisonHistoryMessages();
+  dom.comparisonHistoryList.innerHTML = '';
+  dom.comparisonHistoryEmpty.hidden = true;
   state.selectedComparisonIds = [];
   updateComparisonControls();
+  hideComparisonFeedback();
 }
 
 function showAppView(user) {
@@ -121,7 +126,9 @@ function showAppView(user) {
   checkRecordingSupport();
   state.selectedComparisonIds = [];
   updateComparisonControls();
+  hideComparisonFeedback();
   loadSubmissionHistory();
+  loadComparisonHistory();
 }
 
 function validateFile(file) {
@@ -413,6 +420,25 @@ async function loadSubmissionHistory() {
   }
 }
 
+async function loadComparisonHistory() {
+  clearComparisonHistoryMessages();
+
+  try {
+    const resp = await apiFetch('/api/comparisons');
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showComparisonHistoryError(data.error || 'Could not load your saved progress comparisons.');
+      return;
+    }
+
+    state.savedComparisons = Array.isArray(data) ? data : [];
+    renderComparisonHistory();
+  } catch {
+    showComparisonHistoryError('Could not load your saved progress comparisons.');
+  }
+}
+
 function renderSubmissionHistory() {
   dom.historyList.innerHTML = '';
 
@@ -456,6 +482,36 @@ function renderSubmissionHistory() {
     });
 
     dom.historyList.appendChild(wrapper);
+  });
+}
+
+function renderComparisonHistory() {
+  dom.comparisonHistoryList.innerHTML = '';
+
+  if (state.savedComparisons.length === 0) {
+    dom.comparisonHistoryEmpty.hidden = false;
+    return;
+  }
+
+  dom.comparisonHistoryEmpty.hidden = true;
+
+  state.savedComparisons.forEach((comparison) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'history-item';
+    wrapper.innerHTML = `
+      <button type="button" class="history-item-button" data-comparison-id="${escapeHtml(comparison.comparison_id)}">
+        <span class="history-item-title">Older vs Latest Presentation</span>
+        <span class="history-item-date">
+          ${escapeHtml(buildComparisonMeta(comparison))}
+        </span>
+      </button>
+    `;
+
+    wrapper.querySelector('.history-item-button').addEventListener('click', () => {
+      void openSavedComparison(comparison.comparison_id);
+    });
+
+    dom.comparisonHistoryList.appendChild(wrapper);
   });
 }
 
@@ -515,13 +571,15 @@ async function compareSelectedSubmissions() {
     const title = comparedSubmissions.length === 2
       ? 'Progress Comparison'
       : 'Presentation Comparison';
-    const meta = comparedSubmissions.map((submission, index) => {
-      const label = index === 0 ? 'Earlier' : 'Later';
-      const details = buildSubmissionMeta(submission);
-      return `${label}: ${submission.original_filename || 'Submission'}${details ? ` (${details})` : ''}`;
-    }).join(' | ');
+    const comparisonRecord = data.comparison_record || {};
+    const meta = buildComparisonMeta({
+      older_filename: comparisonRecord.older_filename || comparedSubmissions[0]?.original_filename || 'Older presentation',
+      latest_filename: comparisonRecord.latest_filename || comparedSubmissions[1]?.original_filename || 'Latest presentation',
+      created_at: comparisonRecord.created_at || '',
+    });
 
-    showFeedback(data.comparison, { title, meta });
+    showComparisonFeedback(data.comparison, { title, meta });
+    await loadComparisonHistory();
   } catch {
     showHistoryError('Could not compare the selected presentations.');
   } finally {
@@ -554,6 +612,27 @@ async function openSubmissionFeedback(submissionId) {
     }
   } catch {
     showHistoryError('Could not load this feedback.');
+  }
+}
+
+async function openSavedComparison(comparisonId) {
+  clearComparisonHistoryMessages();
+
+  try {
+    const resp = await apiFetch(`/api/comparisons/${encodeURIComponent(comparisonId)}`);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showComparisonHistoryError(data.error || 'Could not load this saved comparison.');
+      return;
+    }
+
+    showComparisonFeedback(data.comparison_feedback, {
+      title: 'Progress Comparison',
+      meta: buildComparisonMeta(data),
+    });
+  } catch {
+    showComparisonHistoryError('Could not load this saved comparison.');
   }
 }
 
@@ -995,6 +1074,16 @@ function clearHistoryMessages() {
   dom.historyError.hidden = true;
 }
 
+function showComparisonHistoryError(msg) {
+  dom.comparisonHistoryError.textContent = msg;
+  dom.comparisonHistoryError.hidden = false;
+}
+
+function clearComparisonHistoryMessages() {
+  dom.comparisonHistoryError.textContent = '';
+  dom.comparisonHistoryError.hidden = true;
+}
+
 function showFeedback(markdown, opts = {}) {
   dom.feedbackTitle.textContent = opts.title ? `Feedback for ${opts.title}` : 'Your Feedback';
   if (opts.meta) {
@@ -1010,6 +1099,24 @@ function showFeedback(markdown, opts = {}) {
 
   setTimeout(() => {
     dom.feedbackContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 50);
+}
+
+function showComparisonFeedback(markdown, opts = {}) {
+  dom.comparisonFeedbackTitle.textContent = opts.title || 'Progress Comparison';
+  if (opts.meta) {
+    dom.comparisonFeedbackMeta.textContent = opts.meta;
+    dom.comparisonFeedbackMeta.hidden = false;
+  } else {
+    dom.comparisonFeedbackMeta.textContent = '';
+    dom.comparisonFeedbackMeta.hidden = true;
+  }
+
+  dom.comparisonFeedbackContent.innerHTML = renderMarkdown(markdown);
+  dom.comparisonFeedbackContainer.hidden = false;
+
+  setTimeout(() => {
+    dom.comparisonFeedbackContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 50);
 }
 
@@ -1038,6 +1145,28 @@ function hideFeedback() {
   dom.feedbackContent.innerHTML = '';
   state.activeSubmissionId = null;
   state.activeSubmissionStatus = '';
+}
+
+function hideComparisonFeedback() {
+  dom.comparisonFeedbackContainer.hidden = true;
+  dom.comparisonFeedbackTitle.textContent = 'Progress Comparison';
+  dom.comparisonFeedbackMeta.textContent = '';
+  dom.comparisonFeedbackMeta.hidden = true;
+  dom.comparisonFeedbackContent.innerHTML = '';
+}
+
+function buildComparisonMeta(comparison) {
+  const parts = [];
+  if (comparison.older_filename) {
+    parts.push(`Older: ${comparison.older_filename}`);
+  }
+  if (comparison.latest_filename) {
+    parts.push(`Latest: ${comparison.latest_filename}`);
+  }
+  if (comparison.created_at) {
+    parts.push(formatSubmittedAt(comparison.created_at));
+  }
+  return parts.join(' | ');
 }
 
 function buildSubmissionMeta(submission) {
@@ -1157,6 +1286,7 @@ function initEventListeners() {
   });
   dom.refreshHistoryBtn.addEventListener('click', async () => {
     await loadSubmissionHistory();
+    await loadComparisonHistory();
   });
   dom.compareSubmissionsBtn.addEventListener('click', async () => {
     await compareSelectedSubmissions();
@@ -1244,6 +1374,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   dom.historyError = document.getElementById('history-error');
   dom.historyEmpty = document.getElementById('history-empty');
   dom.historyList = document.getElementById('history-list');
+  dom.comparisonHistoryError = document.getElementById('comparison-history-error');
+  dom.comparisonHistoryEmpty = document.getElementById('comparison-history-empty');
+  dom.comparisonHistoryList = document.getElementById('comparison-history-list');
   dom.recordingUnsupported = document.getElementById('recording-unsupported');
   dom.recordingPanel = document.getElementById('recording-panel');
   dom.recordingPreviewLive = document.getElementById('recording-preview-live');
@@ -1275,6 +1408,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   dom.feedbackTitle = document.getElementById('feedback-title');
   dom.feedbackMeta = document.getElementById('feedback-meta');
   dom.feedbackContent = document.getElementById('feedback-content');
+  dom.comparisonFeedbackContainer = document.getElementById('comparison-feedback-container');
+  dom.comparisonFeedbackTitle = document.getElementById('comparison-feedback-title');
+  dom.comparisonFeedbackMeta = document.getElementById('comparison-feedback-meta');
+  dom.comparisonFeedbackContent = document.getElementById('comparison-feedback-content');
 
   initEventListeners();
   updateActionAvailability();
