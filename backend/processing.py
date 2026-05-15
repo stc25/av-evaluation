@@ -5,6 +5,7 @@ import re
 import subprocess
 import uuid
 
+import av
 import requests
 from faster_whisper import WhisperModel
 
@@ -120,7 +121,7 @@ def get_media_duration_seconds(file_path: str) -> float:
                 '-v',
                 'error',
                 '-show_entries',
-                'format=duration',
+                'format=duration:stream=duration',
                 '-print_format',
                 'json',
                 file_path,
@@ -137,15 +138,69 @@ def get_media_duration_seconds(file_path: str) -> float:
 
     try:
         payload = json.loads(proc.stdout)
-        duration_raw = payload.get('format', {}).get('duration')
-        duration = float(duration_raw)
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise ValueError('ffprobe did not return a valid media duration') from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError('ffprobe did not return valid JSON') from exc
 
-    if duration <= 0:
+    duration = _extract_duration_from_ffprobe_payload(payload)
+    if duration is None:
+        duration = _extract_duration_with_pyav(file_path)
+
+    if duration is None or duration <= 0:
         raise ValueError('Media duration must be greater than zero')
 
     return duration
+
+
+def _parse_duration_value(raw_value):
+    try:
+        duration = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    if duration <= 0:
+        return None
+    return duration
+
+
+def _extract_duration_from_ffprobe_payload(payload: dict) -> float | None:
+    format_duration = _parse_duration_value(payload.get('format', {}).get('duration'))
+    if format_duration is not None:
+        return format_duration
+
+    stream_durations = [
+        duration
+        for duration in (
+            _parse_duration_value(stream.get('duration'))
+            for stream in payload.get('streams', [])
+        )
+        if duration is not None
+    ]
+    if stream_durations:
+        return max(stream_durations)
+
+    return None
+
+
+def _extract_duration_with_pyav(file_path: str) -> float | None:
+    try:
+        with av.open(file_path) as container:
+            if container.duration:
+                duration = float(container.duration / av.time_base)
+                if duration > 0:
+                    return duration
+
+            stream_durations = []
+            for stream in container.streams:
+                if stream.duration is not None and stream.time_base is not None:
+                    duration = float(stream.duration * stream.time_base)
+                    if duration > 0:
+                        stream_durations.append(duration)
+
+            if stream_durations:
+                return max(stream_durations)
+    except Exception:
+        return None
+
+    return None
 
 
 def normalise_submission_source(raw_source: str | None) -> str:

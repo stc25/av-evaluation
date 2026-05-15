@@ -155,6 +155,16 @@ def _mark_submission_failed(submission_id: str, error_message: str) -> None:
         )
 
 
+def _parse_client_duration_seconds(raw_value):
+    try:
+        duration = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    if duration <= 0:
+        return None
+    return duration
+
+
 @upload_bp.route('/submissions', methods=['GET'])
 @login_required
 def list_submissions():
@@ -324,6 +334,9 @@ def upload():
     max_bytes = get_max_bytes_for_extension(ext)
     max_mb = max_bytes // (1024 * 1024)
     submission_source = normalise_submission_source(request.form.get('submission_source'))
+    client_duration_seconds = _parse_client_duration_seconds(
+        request.form.get('client_duration_seconds')
+    )
 
     content_length = request.content_length
     if content_length and content_length > max_bytes:
@@ -349,10 +362,17 @@ def upload():
                 'error': 'Media duration validation is unavailable on the server.'
             }), 500
         except ValueError as exc:
-            logger.warning('Media duration validation failed: %s', exc)
-            return jsonify({
-                'error': 'Could not determine media duration. Please upload a standard MP3, M4A, MP4, or WebM file.'
-            }), 422
+            if submission_source == 'recorded' and client_duration_seconds is not None:
+                logger.warning(
+                    'Media duration validation failed for recorded upload; using client duration fallback: %s',
+                    exc,
+                )
+                duration_seconds = client_duration_seconds
+            else:
+                logger.warning('Media duration validation failed: %s', exc)
+                return jsonify({
+                    'error': 'Could not determine media duration. Please upload a standard MP3, M4A, MP4, or WebM file.'
+                }), 422
 
         if duration_seconds > MAX_DURATION_SECONDS:
             return jsonify({

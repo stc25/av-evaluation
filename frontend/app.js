@@ -26,6 +26,7 @@ const state = {
   recordedFileUrl: null,
   recordingTimerId: null,
   recordingStartedAt: 0,
+  recordedDurationSeconds: 0,
   recordingWarningShown: false,
   recordingRetrySuggested: false,
   submissionPollTimerId: null,
@@ -272,6 +273,12 @@ async function enableCameraPreview() {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
+    const diagnostics = await diagnoseRecordingStartFailure(error);
+    console.warn('Unable to start camera preview', {
+      name: error?.name || '',
+      message: error?.message || '',
+      diagnostics,
+    });
     state.mediaStream = null;
     state.recordingState = 'idle';
     state.recordingRetrySuggested = shouldSuggestRecordingRetry(error);
@@ -280,7 +287,7 @@ async function enableCameraPreview() {
     dom.recordingStatus.textContent = 'Unable to start camera preview.';
     dom.recordingTimer.hidden = true;
     clearRecordingWarning();
-    showRecordingError(buildRecordingStartError(error));
+    showRecordingError(buildRecordingStartError(error, diagnostics));
     updateActionAvailability();
   }
 }
@@ -314,6 +321,9 @@ async function submitMedia(file, submissionSource) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('submission_source', submissionSource);
+  if (submissionSource === 'recorded' && state.recordedDurationSeconds > 0) {
+    formData.append('client_duration_seconds', String(state.recordedDurationSeconds));
+  }
 
   try {
     const { ok, data } = await uploadWithProgress(formData, (pct) => {
@@ -732,7 +742,12 @@ async function startRecordingSession() {
 
     recorder.ondataavailable = handleRecorderDataAvailable;
     recorder.onstop = handleRecorderStop;
-    recorder.start(1000);
+    if ((recorder.mimeType || '').includes('mp4')) {
+      // MP4 recordings are less reliable when emitted as many short MediaRecorder chunks.
+      recorder.start();
+    } else {
+      recorder.start(1000);
+    }
 
     dom.recordingPreviewPlayback.hidden = true;
     dom.recordingPreviewPlayback.removeAttribute('src');
@@ -757,11 +772,11 @@ async function startRecordingSession() {
 
 function pickRecordingMimeType() {
   const candidates = [
-    'video/mp4;codecs=h264,aac',
-    'video/mp4',
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
   ];
 
   const canCheckType = typeof window.MediaRecorder?.isTypeSupported === 'function';
@@ -815,6 +830,7 @@ function handleRecorderStop() {
   const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
   const blob = new Blob(state.recordedChunks, { type: mimeType });
   const fileName = buildRecordedFilename(ext);
+  state.recordedDurationSeconds = Math.max(1, Math.round((Date.now() - state.recordingStartedAt) / 1000));
 
   state.recordedFile = new File([blob], fileName, {
     type: mimeType || 'video/webm',
@@ -861,6 +877,7 @@ function discardRecording() {
   clearRecordingWarning();
   state.recordedFile = null;
   state.recordedFileSubmitted = false;
+  state.recordedDurationSeconds = 0;
   cleanupRecordedFileUrl();
   dom.recordingPreviewPlayback.pause();
   dom.recordingPreviewPlayback.removeAttribute('src');
@@ -891,6 +908,7 @@ function resetRecordingUi() {
   state.recordedChunks = [];
   state.recordedFile = null;
   state.recordedFileSubmitted = false;
+  state.recordedDurationSeconds = 0;
   cleanupRecordedFileUrl();
   dom.recordingPreviewLive.hidden = true;
   dom.recordingPreviewLive.srcObject = null;
@@ -979,6 +997,36 @@ function shouldSuggestRecordingRetry(error) {
   return name === 'NotReadableError' || name === 'TrackStartError';
 }
 
+async function diagnoseRecordingStartFailure(error) {
+  const name = error?.name || '';
+  if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+    return null;
+  }
+  if (!['NotReadableError', 'TrackStartError', 'NotFoundError', 'DevicesNotFoundError'].includes(name)) {
+    return null;
+  }
+
+  const diagnose = async (constraints) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      stream.getTracks().forEach((track) => track.stop());
+      return { ok: true, name: '' };
+    } catch (diagnosticError) {
+      return {
+        ok: false,
+        name: diagnosticError?.name || '',
+      };
+    }
+  };
+
+  const [video, audio] = await Promise.all([
+    diagnose({ video: true }),
+    diagnose({ audio: true }),
+  ]);
+
+  return { video, audio };
+}
+
 function formatRecordingTime(milliseconds) {
   const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -986,16 +1034,28 @@ function formatRecordingTime(milliseconds) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function buildRecordingStartError(error) {
+function buildRecordingStartError(error, diagnostics = null) {
   const name = error?.name || '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
     return 'Camera or microphone permission was denied. Please allow access and try again.';
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    if (diagnostics?.video?.ok && !diagnostics?.audio?.ok) {
+      return 'The webcam is available, but no usable microphone could be started. Check your browser microphone permission and your operating system privacy settings, then try again.';
+    }
+    if (!diagnostics?.video?.ok && diagnostics?.audio?.ok) {
+      return 'The microphone is available, but no usable webcam could be started. Check your browser camera permission and your operating system privacy settings, then try again.';
+    }
     return 'No usable webcam or microphone was found on this device.';
   }
   if (name === 'NotReadableError' || name === 'TrackStartError') {
-    return 'The webcam or microphone could not be started because another app or browser tab may still be using it. Close anything using the camera or mic, then try Release Camera and Retry.';
+    if (diagnostics?.video?.ok && !diagnostics?.audio?.ok) {
+      return 'The webcam is available, but the microphone could not be started. This is usually a browser, operating system privacy, or device-driver issue rather than this page. Check microphone access, then try Release Camera and Retry.';
+    }
+    if (!diagnostics?.video?.ok && diagnostics?.audio?.ok) {
+      return 'The microphone is available, but the webcam could not be started. This is usually a browser, operating system privacy, or device-driver issue rather than this page. Check camera access, then try Release Camera and Retry.';
+    }
+    return 'The webcam or microphone could not be started. This is usually caused by browser or operating system device access problems such as privacy settings, a driver issue, or another app using the device. Try Release Camera and Retry after checking camera and microphone access.';
   }
   if (name === 'NotSupportedError') {
     return 'This browser could not start a compatible recording format. Try Chrome or Edge, or upload a file instead.';
@@ -1414,6 +1474,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   dom.comparisonFeedbackContent = document.getElementById('comparison-feedback-content');
 
   initEventListeners();
+});
+
+window.addEventListener('load', async () => {
   updateActionAvailability();
   await checkAuth();
 });
