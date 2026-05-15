@@ -7,7 +7,7 @@ The app is built as a single Flask service that:
 - serves the static frontend from `frontend/`
 - exposes authentication, admin, and upload APIs
 - stores users, transcripts, and feedback in SQLite for local development or MariaDB in the Docker deployment
-- transcribes audio/video with `faster-whisper`
+- transcribes audio/video with local `faster-whisper` or an optional remote HTTP transcription bridge
 - sends the transcript to Ollama for feedback generation
 
 ## Features
@@ -59,7 +59,7 @@ The current application code lives in `backend/` and `frontend/`. Production dep
 1. A user signs in through the frontend.
 2. The browser uploads an `MP3`, `MP4`, or recorded `WebM` file to `POST /api/upload`.
 3. The backend writes the upload to a temporary file.
-4. `faster-whisper` transcribes the file.
+4. `faster-whisper` transcribes the file locally, or the backend sends it to a remote HTTP transcription bridge when `TRANSCRIPTION_URL` is configured.
 5. The transcript is sent to Ollama using the configured local model.
 6. The generated markdown feedback is returned to the frontend.
 7. The transcript and feedback are stored in SQLite.
@@ -68,8 +68,8 @@ The current application code lives in `backend/` and `frontend/`. Production dep
 ## Prerequisites
 
 - Python `3.12+`
-- Ollama installed and running locally
-- An Ollama model available locally
+- Ollama installed and running locally, or reachable remotely
+- An Ollama model available on the configured Ollama server
 - Internet access the first time `faster-whisper` downloads its model files
 
 ## Recommended Local Runtime
@@ -157,6 +157,7 @@ The application is configured entirely through environment variables.
 | `APP_DB_PATH` | `backend/instance/app.db` | SQLite database file path. Useful for separate dev/test databases. |
 | `OLLAMA_URL` | `http://localhost:11434/api/generate` | Ollama generate endpoint. |
 | `OLLAMA_MODEL` | `qwen2.5:latest` | Ollama model name used to generate feedback. |
+| `TRANSCRIPTION_URL` | unset | Optional remote HTTP transcription endpoint, for example `http://131.111.168.123:8001/transcribe`. When set, the app uses the remote service instead of local Whisper. |
 | `WHISPER_MODEL_SIZE` | `medium` | `faster-whisper` model size. Smaller models are faster but less accurate. |
 | `WHISPER_DEVICE` | `auto` | Device selection for `faster-whisper`. |
 | `WHISPER_COMPUTE_TYPE` | `int8` | Compute mode for `faster-whisper`. |
@@ -179,6 +180,124 @@ WHISPER_MODEL_SIZE=small \
 WHISPER_COMPUTE_TYPE=int8 \
 ./.venv-wsl/bin/python run_dev.py
 ```
+
+Use a remote transcription bridge instead of local Whisper:
+
+```bash
+TRANSCRIPTION_URL=http://131.111.168.123:8001/transcribe \
+OLLAMA_URL=http://131.111.168.123:11434/api/generate \
+./.venv-wsl/bin/python run_dev.py
+```
+
+## Remote Whisper Bridge
+
+You can offload transcription to a separate Docker container on another server, for example the same GPU host that already runs Ollama. The app then calls that bridge over HTTP using `TRANSCRIPTION_URL`.
+
+Recommended endpoint:
+
+```text
+http://131.111.168.123:8001/transcribe
+```
+
+### Bridge Files on the Remote Server
+
+Create these files on the remote server:
+
+- `/home/administrator/faster-whisper.yml`
+- `/home/administrator/whisper-bridge/Dockerfile`
+- `/home/administrator/whisper-bridge/requirements.txt`
+- `/home/administrator/whisper-bridge/app.py`
+
+The bridge itself is a small FastAPI service that accepts a multipart upload and returns JSON containing the transcript.
+
+### Example `faster-whisper.yml`
+
+This example exposes the bridge over HTTP on port `8001`.
+
+```yaml
+version: "3.8"
+
+services:
+  whisper-bridge:
+    build:
+      context: /home/administrator/whisper-bridge
+      dockerfile: Dockerfile
+    container_name: whisper-bridge
+    runtime: nvidia
+    environment:
+      TZ: Europe/London
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      WHISPER_MODEL_SIZE: medium
+      WHISPER_LANGUAGE: en
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: int8
+      WHISPER_BEAM_SIZE: "1"
+      WHISPER_VAD_FILTER: "true"
+      HF_HOME: /cache/huggingface
+    volumes:
+      - /opt/whisper-cache:/cache
+      - /tmp/whisper-bridge:/tmp/whisper-bridge
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+```
+
+If the remote server does not have working GPU support, switch the bridge to CPU mode:
+
+```yaml
+WHISPER_DEVICE: cpu
+WHISPER_COMPUTE_TYPE: int8
+```
+
+and remove:
+
+```yaml
+runtime: nvidia
+NVIDIA_VISIBLE_DEVICES: all
+NVIDIA_DRIVER_CAPABILITIES: compute,utility
+```
+
+### Build and Start the Bridge
+
+On the remote server:
+
+```bash
+cd /home/administrator
+sudo docker-compose -f faster-whisper.yml up -d --build
+```
+
+### Check Health
+
+```bash
+curl http://127.0.0.1:8001/health
+```
+
+Expected response shape:
+
+```json
+{
+  "status": "ok",
+  "model": "medium",
+  "language": "en",
+  "device": "cuda",
+  "compute_type": "int8"
+}
+```
+
+### Point the App at the Bridge
+
+Set:
+
+```bash
+TRANSCRIPTION_URL=http://131.111.168.123:8001/transcribe
+```
+
+When `TRANSCRIPTION_URL` is set:
+
+- the app uploads media to the remote bridge
+- the worker uses the returned transcript
+- local Whisper settings become fallback values only
 
 ## Data Storage
 
