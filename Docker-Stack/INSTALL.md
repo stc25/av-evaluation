@@ -52,7 +52,7 @@ Point your domain name at the public IP of the server.
 
 Example:
 
-- `app.example.com -> <server public IP>`
+- `cnlp.langcen.cam.ac.uk -> <server public IP>`
 
 Do this before starting Caddy with HTTPS enabled.
 
@@ -113,9 +113,9 @@ The example file already includes the supported runtime and debug environment va
 
 ```text
 SECRET_KEY=<long-random-secret>
-CADDY_SITE_ADDRESS=app.example.com
+CADDY_SITE_ADDRESS=cnlp.langcen.cam.ac.uk
 CADDY_EMAIL=you@example.com
-ALLOWED_ORIGINS=https://app.example.com
+ALLOWED_ORIGINS=https://cnlp.langcen.cam.ac.uk
 SESSION_COOKIE_SECURE=true
 ```
 
@@ -230,8 +230,8 @@ Do not keep those HTTP test values in a real internet-facing deployment.
 For a real deployment with automatic Caddy certificates, use values like:
 
 ```text
-CADDY_SITE_ADDRESS=app.example.com
-ALLOWED_ORIGINS=https://app.example.com
+CADDY_SITE_ADDRESS=cnlp.langcen.cam.ac.uk
+ALLOWED_ORIGINS=https://cnlp.langcen.cam.ac.uk
 SESSION_COOKIE_SECURE=true
 APP_DEBUG=false
 APP_LOG_LEVEL=INFO
@@ -308,7 +308,7 @@ Caddy will automatically obtain and renew TLS certificates when:
 
 If those conditions are met, your app should become available at:
 
-- `https://app.example.com`
+- `https://cnlp.langcen.cam.ac.uk`
 
 If you leave `CADDY_SITE_ADDRESS=:80`, the stack will not be configured for public automatic HTTPS.
 
@@ -339,7 +339,7 @@ You can then sign in through the web UI.
 Check that the app is serving over HTTPS:
 
 ```bash
-curl -I https://app.example.com
+curl -I https://cnlp.langcen.cam.ac.uk
 ```
 
 Check that the response includes TLS/security behavior:

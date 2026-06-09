@@ -273,8 +273,8 @@ OLLAMA_URL=http://ollama.example.internal:11434/api/generate
 For real HTTPS production, also make sure:
 
 ```text
-CADDY_SITE_ADDRESS=app.example.com
-ALLOWED_ORIGINS=https://app.example.com
+CADDY_SITE_ADDRESS=cnlp.langcen.cam.ac.uk
+ALLOWED_ORIGINS=https://cnlp.langcen.cam.ac.uk
 SESSION_COOKIE_SECURE=true
 ```
 

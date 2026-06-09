@@ -138,6 +138,53 @@ Then open:
 - app: [http://localhost:8080](http://localhost:8080)
 - admin page: [http://localhost:8080/admin.html](http://localhost:8080/admin.html)
 
+## Running with Docker
+
+Use the consolidated `docker/` layout for both development and production Docker runs.
+
+**Development (fast local iteration)**
+
+1. Copy the example env and edit values as needed:
+
+```bash
+cd docker
+cp .env.production.example .env.production
+# Edit docker/.env.production to suit your local environment
+```
+
+2. Start services with the development override (binds ports for local access):
+
+```bash
+cd docker
+docker compose up --build
+# or detached
+docker compose up -d --build
+```
+
+The app will be reachable at http://localhost:8080 and the admin UI at /admin.html.
+
+**Production (production-like deployment)**
+
+1. Prepare a production env file (set strong secrets and correct hostnames):
+
+```bash
+cd docker
+cp .env.production.example .env.production
+# Edit docker/.env.production with production values
+```
+
+2. Start the production stack using the env file:
+
+```bash
+cd docker
+docker compose --env-file .env.production -f docker-compose.yml up -d --build
+```
+
+Notes:
+- The consolidated `docker/` layout replaces the older `Docker-Stack/` deployment layout. `Docker-Stack/` is kept in the repository as a backup and can be removed once you are satisfied with the new `docker/` layout.
+- Build context in `docker/docker-compose.yml` expects to be run from inside the `docker/` directory (it uses `context: ..`).
+- For CI/CD or other orchestration you can adapt `docker/docker-compose.yml` or build images with `docker build -f docker/backend/Dockerfile -t av-evaluation:latest .` from the repository root.
+
 ## Default Local Login
 
 If you created the sample admin above:

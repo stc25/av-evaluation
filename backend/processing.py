@@ -6,10 +6,36 @@ import subprocess
 import uuid
 
 import av
+from openai import (
+    APIConnectionError,
+    APIError,
+    APITimeoutError,
+    AuthenticationError,
+    OpenAI,
+    PermissionDeniedError,
+    RateLimitError,
+)
 import requests
 from faster_whisper import WhisperModel
+from transcription_config import OPENAI_TRANSCRIPTION_PROMPT
 
 logger = logging.getLogger(__name__)
+
+
+def _get_non_empty_env(name: str, default: str = '') -> str:
+    return os.environ.get(name, default).strip() or default
+
+
+def _get_float_env(name: str, default: float) -> float:
+    raw_value = os.environ.get(name, '').strip()
+    if not raw_value:
+        return default
+    try:
+        return float(raw_value)
+    except ValueError:
+        logger.warning('Invalid float value for %s; using default %s', name, default)
+        return default
+
 
 ALLOWED_EXTENSIONS = {'mp3', 'mp4', 'webm', 'm4a'}
 MAX_AUDIO_BYTES = 50 * 1024 * 1024
@@ -18,10 +44,31 @@ MAX_DURATION_SECONDS = 15 * 60
 
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://131.111.168.123:11434/api/generate')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen2.5:latest')
+FEEDBACK_PROVIDER = _get_non_empty_env('FEEDBACK_PROVIDER', 'ollama').lower()
+TRANSCRIPTION_PROVIDER = _get_non_empty_env('TRANSCRIPTION_PROVIDER').lower()
 TRANSCRIPTION_URL = os.environ.get('TRANSCRIPTION_URL', '').strip()
 WHISPER_MODEL_SIZE = os.environ.get('WHISPER_MODEL_SIZE', 'medium')
 WHISPER_DEVICE = os.environ.get('WHISPER_DEVICE', 'auto')
 WHISPER_COMPUTE_TYPE = os.environ.get('WHISPER_COMPUTE_TYPE', 'int8')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '').strip()
+OPENAI_FEEDBACK_MODEL = _get_non_empty_env('OPENAI_FEEDBACK_MODEL', 'gpt-4o-mini')
+OPENAI_TRANSCRIPTION_MODEL = _get_non_empty_env(
+    'OPENAI_TRANSCRIPTION_MODEL',
+    'gpt-4o-mini-transcribe',
+)
+OPENAI_TRANSCRIPTION_LANGUAGE = _get_non_empty_env(
+    'OPENAI_TRANSCRIPTION_LANGUAGE',
+    'en',
+)
+OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS = _get_float_env(
+    'OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS',
+    1800,
+)
+OPENAI_API_KEY_PLACEHOLDERS = {
+    'replace-with-your-openai-api-key',
+    'your-existing-key',
+    'sk-proj-...',
+}
 UPLOADS_DIR = os.environ.get(
     'UPLOADS_DIR',
     os.path.join(os.path.dirname(__file__), 'instance', 'uploads'),
@@ -91,6 +138,7 @@ COMPARISON_PROMPT = (
 )
 
 _whisper_model = None
+_openai_client = None
 
 
 class SubmissionProcessingError(Exception):
@@ -220,6 +268,20 @@ def get_whisper_model() -> WhisperModel:
     return _whisper_model
 
 
+def get_openai_client() -> OpenAI:
+    global _openai_client
+    if _openai_client is None:
+        if not OPENAI_API_KEY or OPENAI_API_KEY in OPENAI_API_KEY_PLACEHOLDERS:
+            raise SubmissionProcessingError(
+                'OpenAI API key is not configured. Add your API key to .env.production and restart the app.'
+            )
+        _openai_client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            timeout=OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS,
+        )
+    return _openai_client
+
+
 def transcribe_remote(file_path: str) -> str:
     file_name = os.path.basename(file_path)
 
@@ -268,9 +330,62 @@ def transcribe_remote(file_path: str) -> str:
     return transcript
 
 
+def transcribe_openai(file_path: str) -> str:
+    file_name = os.path.basename(file_path)
+    request_args = {
+        'model': OPENAI_TRANSCRIPTION_MODEL,
+    }
+    if OPENAI_TRANSCRIPTION_LANGUAGE:
+        request_args['language'] = OPENAI_TRANSCRIPTION_LANGUAGE
+    if OPENAI_TRANSCRIPTION_PROMPT:
+        request_args['prompt'] = OPENAI_TRANSCRIPTION_PROMPT
+
+    try:
+        with open(file_path, 'rb') as handle:
+            transcription = get_openai_client().audio.transcriptions.create(
+                file=handle,
+                **request_args,
+            )
+    except AuthenticationError as exc:
+        raise SubmissionProcessingError(
+            'OpenAI rejected the configured API key. Check OPENAI_API_KEY in .env.production and restart the app.'
+        ) from exc
+    except PermissionDeniedError as exc:
+        raise SubmissionProcessingError(
+            'The configured OpenAI API key does not have access to the transcription model.'
+        ) from exc
+    except RateLimitError as exc:
+        raise SubmissionProcessingError(
+            'OpenAI rate limit or quota was reached. Check API billing, limits, and project usage.'
+        ) from exc
+    except (APIConnectionError, APITimeoutError, APIError) as exc:
+        raise SubmissionProcessingError(
+            'Could not connect to the OpenAI transcription service. Please try again later.'
+        ) from exc
+
+    transcript = (getattr(transcription, 'text', '') or '').strip()
+    if not transcript:
+        raise SubmissionProcessingError('OpenAI transcription returned no transcript.')
+
+    logger.info(
+        'OpenAI transcription completed file=%s model=%s',
+        file_name,
+        OPENAI_TRANSCRIPTION_MODEL,
+    )
+    return transcript
+
+
 def transcribe(file_path: str) -> str:
-    if TRANSCRIPTION_URL:
+    if TRANSCRIPTION_PROVIDER == 'openai':
+        return transcribe_openai(file_path)
+
+    if TRANSCRIPTION_PROVIDER == 'remote' or (not TRANSCRIPTION_PROVIDER and TRANSCRIPTION_URL):
         return transcribe_remote(file_path)
+
+    if TRANSCRIPTION_PROVIDER not in {'', 'local', 'whisper', 'faster-whisper'}:
+        raise SubmissionProcessingError(
+            f'Unsupported transcription provider: {TRANSCRIPTION_PROVIDER}'
+        )
 
     model = get_whisper_model()
     segments, _info = model.transcribe(
@@ -284,7 +399,7 @@ def transcribe(file_path: str) -> str:
 
 def get_feedback(transcript: str) -> str:
     prompt = FEEDBACK_PROMPT.format(transcript=transcript)
-    return _generate_with_ollama(prompt)
+    return generate_feedback_text(prompt)
 
 
 def _clean_comparison_label(label: str) -> str:
@@ -304,7 +419,55 @@ def compare_transcripts(
         earlier_transcript=earlier_transcript,
         later_transcript=later_transcript,
     )
-    return _generate_with_ollama(prompt)
+    return generate_feedback_text(prompt)
+
+
+def generate_feedback_text(prompt: str) -> str:
+    if FEEDBACK_PROVIDER == 'openai':
+        return _generate_with_openai(prompt)
+
+    if FEEDBACK_PROVIDER in {'', 'ollama'}:
+        return _generate_with_ollama(prompt)
+
+    raise SubmissionProcessingError(f'Unsupported feedback provider: {FEEDBACK_PROVIDER}')
+
+
+def _generate_with_openai(prompt: str) -> str:
+    try:
+        response = get_openai_client().chat.completions.create(
+            model=OPENAI_FEEDBACK_MODEL,
+            messages=[
+                {
+                    'role': 'user',
+                    'content': prompt,
+                }
+            ],
+            temperature=0.2,
+        )
+    except AuthenticationError as exc:
+        raise SubmissionProcessingError(
+            'OpenAI rejected the configured API key. Check OPENAI_API_KEY in .env.production and restart the app.'
+        ) from exc
+    except PermissionDeniedError as exc:
+        raise SubmissionProcessingError(
+            'The configured OpenAI API key does not have access to the feedback model.'
+        ) from exc
+    except RateLimitError as exc:
+        raise SubmissionProcessingError(
+            'OpenAI rate limit or quota was reached. Check API billing, limits, and project usage.'
+        ) from exc
+    except (APIConnectionError, APITimeoutError, APIError) as exc:
+        raise SubmissionProcessingError(
+            'Could not connect to the OpenAI feedback service. Please try again later.'
+        ) from exc
+
+    content = response.choices[0].message.content if response.choices else ''
+    feedback = (content or '').strip()
+    if not feedback:
+        raise SubmissionProcessingError('OpenAI feedback generation returned no content.')
+
+    logger.info('OpenAI feedback completed model=%s', OPENAI_FEEDBACK_MODEL)
+    return re.sub(r'<think>.*?</think>', '', feedback, flags=re.DOTALL).strip()
 
 
 def _generate_with_ollama(prompt: str) -> str:

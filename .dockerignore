@@ -8,8 +8,8 @@ backend/.tmp_verify_overlimit.py
 backend/migrations/__pycache__
 frontend/.DS_Store
 frontend/node_modules
-Docker-Stack/.env.production
-Docker-Stack/.env.production.local
+docker/.env.production
+docker/.env.production.local
 **/__pycache__
 **/*.pyc
 **/*.pyo
